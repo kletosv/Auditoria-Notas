@@ -3,6 +3,7 @@ from pathlib import Path
 import fitz
 
 DB="auditoria.sqlite3"
+ENGINE_VERSION="2.0-contexto-adi"
 KEYWORDS={"RETIFICACAO":r"RETIFIC|ONDE CONSTA|PASSE A CONSTAR|CORRIG",
           "INCLUSAO":r"INCLU[SÍI]|INCLUIR|ACRESCENT",
           "ANULACAO":r"ANULA|TORNAR SEM EFEITO|DESCONSIDER|EXCLUIR|CANCELA"}
@@ -14,6 +15,13 @@ def connect():
     con=sqlite3.connect(DB)
     con.execute("CREATE TABLE IF NOT EXISTS docs (id TEXT PRIMARY KEY, name TEXT, numero INTEGER, tipo TEXT, pages INTEGER DEFAULT 0, done_pages INTEGER DEFAULT 0, status TEXT DEFAULT 'PENDENTE', error TEXT DEFAULT '')")
     con.execute("CREATE TABLE IF NOT EXISTS hits (doc TEXT, page INTEGER, tipo TEXT, matricula TEXT, servidor TEXT, exercicio TEXT, base_valor TEXT, trecho TEXT, situacao TEXT DEFAULT 'CANDIDATO - REVISAR', UNIQUE(doc,page,tipo,matricula,exercicio,trecho))")
+    con.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")
+    version=con.execute("SELECT value FROM meta WHERE key='engine_version'").fetchone()
+    if version is None or version[0]!=ENGINE_VERSION:
+        # Candidatos antigos são inválidos; não reaproveitar resultados da heurística anterior.
+        con.execute("DELETE FROM hits")
+        con.execute("DELETE FROM docs")
+        con.execute("INSERT OR REPLACE INTO meta(key,value) VALUES ('engine_version',?)",(ENGINE_VERSION,))
     con.commit()
     return con
 def identity(path):
@@ -24,15 +32,46 @@ def identity(path):
     digest=hashlib.sha256(path.read_bytes()).hexdigest()
     return digest,num,typ
 def load_base_csv(path):
+    """Carrega CSV Excel (UTF-8, UTF-16, Windows-1252) sem modificar a base."""
+    import io
+    path=Path(path)
+    if not path.is_file():
+        raise FileNotFoundError(f"Base Geral não encontrada: {path}")
+    raw=path.read_bytes()
+    if not raw:
+        raise ValueError("Arquivo CSV da Base Geral está vazio")
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        encodings=("utf-16",)
+    elif raw.startswith(b"\xef\xbb\xbf"):
+        encodings=("utf-8-sig",)
+    else:
+        encodings=("utf-8-sig", "cp1252", "latin-1")
+    content=None
+    for encoding in encodings:
+        try:
+            content=raw.decode(encoding)
+            break
+        except UnicodeDecodeError:
+            continue
+    if content is None:
+        raise ValueError("Não foi possível identificar a codificação do CSV")
+    # Excel brasileiro costuma usar ;, mas também aceita , e tab.
+    header=next((line for line in content.splitlines() if line.strip()), "")
+    delimiter=max((";", ",", "\t"), key=header.count)
+    if delimiter not in header:
+        raise ValueError("Separador do CSV não identificado")
+    reader=csv.DictReader(io.StringIO(content, newline=""), delimiter=delimiter)
+    headers={normalize(h).strip().lstrip("\ufeff") for h in (reader.fieldnames or []) if h}
+    if not {"MATRICULA", "SERVIDOR"}.issubset(headers):
+        raise ValueError("CSV inválido: abra a aba Base Geral antes de salvar; colunas MATRÍCULA e SERVIDOR são obrigatórias")
     data={}
-    if not Path(path).exists(): return data
-    with open(path,encoding='utf-8-sig',newline='') as f:
-        sample=f.read(4096);f.seek(0)
-        delim=';' if sample.count(';')>sample.count(',') else ','
-        for r in csv.DictReader(f,delimiter=delim):
-            normalized={normalize(k).strip():v for k,v in r.items() if k}
-            mat=re.sub(r'\D','',normalized.get('MATRICULA',''))
-            if mat: data[mat]=normalized
+    for row in reader:
+        normalized={normalize(k).strip():v for k,v in row.items() if k}
+        mat=re.sub(r"\D", "", normalized.get("MATRICULA", "") or "")
+        if mat:
+            data[mat]=normalized
+    if not data:
+        raise ValueError("Nenhuma matrícula válida foi encontrada no CSV")
     return data
 def scan_one(path,base):
     con=connect()
@@ -50,20 +89,30 @@ def scan_one(path,base):
                 raw=pdf[i].get_text(sort=True)
                 lines=[x.strip() for x in raw.splitlines() if x.strip()]
                 norm=[normalize(x) for x in lines]
-                # Contexto curto: cabeçalhos de ato e palavras-chave não garantem vínculo linha a linha.
+                # Filtro conservador: exigir contexto explícito de avaliação individual
+                # E matrícula existente na base. Não usar anos soltos da página.
+                adi_context=re.compile(r"AVALIACAO\s+(?:DE\s+)?DESEMPENHO|\bADI\b|\bPGDI\b|NOTAS?\s+(?:DA\s+)?AVALIACAO|RESULTADO\s+(?:DA\s+)?AVALIACAO")
+                negative=re.compile(r"ORCAMENTARI|CONTRATO|LICITACAO|EMPENHO|PREGAO|TERMO ADITIVO")
                 for j,line in enumerate(norm):
-                    mats=set(MAT.findall(line))
-                    if not mats:continue
-                    context=' '.join(norm[max(0,j-14):min(len(lines),j+4)])
-                    kinds=[k for k,pattern in KEYWORDS.items() if re.search(pattern,context)]
+                    mats={m for m in MAT.findall(line) if m in base}
+                    if not mats: continue
+                    # A janela limitada evita associar uma retificação de outro ato.
+                    before=' '.join(norm[max(0,j-10):j+1])
+                    after=' '.join(norm[j:min(len(norm),j+3)])
+                    context=before+' '+after
+                    if not adi_context.search(context):continue
+                    if negative.search(context):continue
+                    kinds=[k for k,pattern in KEYWORDS.items() if re.search(pattern,before)]
                     if not kinds:continue
-                    yrs=sorted(set(YEARS.findall(context)))
-                    excerpt=' | '.join(lines[max(0,j-2):min(len(lines),j+3)])[:850]
+                    # Só atribuir exercício quando estiver na própria linha;
+                    # caso contrário, manter indeterminado para revisão humana.
+                    yrs=sorted(set(YEARS.findall(line))) or ['INDETERMINADO']
+                    excerpt=' | '.join(lines[max(0,j-10):min(len(lines),j+3)])[:1400]
                     for mat in mats:
-                        r=base.get(mat,{})
+                        r=base[mat]
                         name=r.get('SERVIDOR','')
                         for kind in kinds:
-                            for yr in (yrs or ['INDETERMINADO']):
+                            for yr in yrs:
                                 value=r.get('NOTA '+yr,'') if yr!='INDETERMINADO' else ''
                                 con.execute("INSERT OR IGNORE INTO hits(doc,page,tipo,matricula,servidor,exercicio,base_valor,trecho) VALUES(?,?,?,?,?,?,?,?)",(digest,i+1,kind,mat,name,yr,str(value),excerpt))
                 con.execute("UPDATE docs SET done_pages=? WHERE id=?",(i+1,digest))
