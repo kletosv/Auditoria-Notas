@@ -1,0 +1,8 @@
+1. Instale Python 3.10+.
+2. Na pasta deste projeto, crie a pasta pdfs e coloque APENAS os PDFs do lote desejado.
+3. Exporte a aba Base Geral para CSV UTF-8 com nome base_geral.csv.
+4. Execute: pip install -r requirements.txt
+5. Execute: python -m streamlit run app.py
+6. Clique em Iniciar / retomar varredura.
+7. O banco auditoria.sqlite3 guarda páginas já percorridas; faça backup dele.
+ATENÇÃO: extração textual não é validação documental. Não usar candidatos como correções sem revisão.
