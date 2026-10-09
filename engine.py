@@ -1,4 +1,4 @@
-"""SIDA/ELÚCIDA — motor 4.0 (triagem documental, não homologação).
+"""SIDA/ELÚCIDA — motor 6.0 (triagem documental, não homologação).
 
 Compatível com app.py existente: connect(), run_folder(folder, base_csv).
 Somente PDFs fornecidos pelo usuário. Não altera a Base Geral.
@@ -14,7 +14,7 @@ from pathlib import Path
 import fitz
 
 DB = "auditoria.sqlite3"
-ENGINE_VERSION = "5.0-layout-cabecalho-20261009"
+ENGINE_VERSION = "6.0-colunas-por-coordenadas-20261009"
 YEARS = tuple(str(x) for x in range(2019, 2026))
 MAT = re.compile(r"(?<!\d)\d{7,11}(?!\d)")
 ACT = re.compile(r"^\s*(?:EDITAL|RESOLUCAO|PORTARIA|DECRETO|EXTRATO|AVISO|DESPACHO|ATO|REPUBLICACAO|RETIFICACAO)\b")
@@ -125,86 +125,132 @@ def matches_name(text, name):
 
 
 def visual_rows(page, tolerance=3.3):
-    """Reconstrói linhas pela coordenada Y das palavras, não pelo texto corrido."""
-    words=sorted(page.get_text("words"), key=lambda w:(round(w[3]/tolerance),w[0]))
-    rows=[]
-    for w in words:
-        x0,y0,x1,y1,t,*_=w
-        cy=(y0+y1)/2
-        if rows and abs(rows[-1]["y"]-cy)<=tolerance:
-            rows[-1]["words"].append((x0,t))
+    """Agrupa palavras por linha visual usando posição vertical real."""
+    words = sorted(page.get_text("words"), key=lambda w: ((w[1]+w[3])/2, w[0]))
+    rows = []
+    for word in words:
+        x0, y0, x1, y1, token, *_ = word
+        cy = (y0+y1)/2
+        if rows and abs(rows[-1]["y"] - cy) <= tolerance:
+            rows[-1]["words"].append((x0,x1,str(token)))
         else:
-            rows.append({"y":cy,"words":[(x0,t)]})
-    for r in rows:
-        r["words"].sort(key=lambda x:x[0])
-        r["text"]=" ".join(t for _,t in r["words"])
+            rows.append({"y":cy,"words":[(x0,x1,str(token))]})
+    for row in rows:
+        row["words"].sort(key=lambda w:w[0])
+        row["text"]=" ".join(w[2] for w in row["words"])
     return rows
 
 
-def extract_candidates(page, base, inherited=None):
-    """Extrai candidatos por linha visual, com contexto explícito.
+def column_headers(row):
+    """Anos explicitamente escritos numa linha de cabeçalho e posições X.
 
-    Não infere o exercício do ano do DOE. Não interpreta a sequência
-    de notas como anos sem cabeçalho de colunas inequívoco.
+    Recusa anos repetidos, datas e mais de um ano na mesma célula.
     """
+    line = normalize(row["text"])
+    if re.search(r"\b(?:PUBLICACAO|DIARIO OFICIAL|DATA|DOE)\b",line):
+        return {}
+    if not (re.search(r"\b(?:NOTA|AVALIACAO|EXERCICIO|MEDIA|ANO|2019|2020|2021|2022|2023|2024|2025)\b",line)):
+        return {}
+    found={}
+    for x0,x1,word in row["words"]:
+        w=normalize(word).strip(".:;()[]")
+        if w in YEARS:
+            if w in found:
+                return {}
+            found[w]=(x0+x1)/2
+    return found if len(found)>=2 else {}
+
+
+def aligned_scores(row, header):
+    """Mapeia SOMENTE valores visualmente alinhados a anos explícitos.
+
+    Não atribui média nem código sem coluna própria e não converte Cxxx.
+    """
+    if not header:
+        return {}
+    years=sorted(header, key=lambda y:header[y])
+    centers=[header[y] for y in years]
+    result={}
+    for x0,x1,token in row["words"]:
+        val=normalize(token).strip(";:|[]()")
+        if not re.fullmatch(r"(?:100(?:[,\.]00)?|(?:[0-9]|[1-9][0-9])[,\.][0-9]{1,2}|C[0-9]{3})",val):
+            continue
+        cx=(x0+x1)/2
+        k=min(range(len(centers)),key=lambda j:abs(cx-centers[j]))
+        # Rejeita valores fora das faixas dos anos e alinhamentos ambíguos.
+        distances=sorted(abs(cx-c) for c in centers)
+        if distances[0]>32 or (len(distances)>1 and distances[1]-distances[0]<8):
+            continue
+        year=years[k]
+        if year in result:
+            result[year]=None  # mais de um valor na mesma coluna
+        else:
+            result[year]=val
+    return {year:val for year,val in result.items() if val is not None}
+
+
+def extract_candidates(page, base, inherited=None):
     rows=visual_rows(page)
-    context=dict(inherited or {"adi":False,"kind":None,"year":"INDETERMINADO","header":""})
-    # Contexto herdado de página anterior é usado apenas como pista,
-    # nunca como prova de ato na página atual.
-    saw_adi=False
+    context={"adi":False,"kind":None,"year":"INDETERMINADO","header":""}
     recent=[]
-    for idx,r in enumerate(rows):
-        line=normalize(r["text"])
-        recent.append(line)
-        recent=recent[-24:]
+    header_columns={}
+    header_y=-1000
+    for idx,row in enumerate(rows):
+        line=normalize(row["text"])
+        recent=(recent+[line])[-24:]
         if ACT.search(line):
             context={"adi":False,"kind":None,"year":"INDETERMINADO","header":line}
+            header_columns={}
             recent=[line]
         if ADI.search(line):
             context["adi"]=True
-            saw_adi=True
-            context["header"]=(context.get("header","")+" | "+line)[-1100:]
+            context["header"]=(context["header"]+" | "+line)[-1100:]
         for label,pattern in KIND.items():
             if pattern.search(line):
                 context["kind"]=label
-                context["header"]=(context.get("header","")+" | "+line)[-1100:]
+                context["header"]=(context["header"]+" | "+line)[-1100:]
                 break
         explicit=year_context(" ".join(recent))
         if explicit!="INDETERMINADO":
             context["year"]=explicit
         if BAD.search(line):
             continue
+        # Cabeçalho válido precisa estar na seção de ADI/PGDI.
+        columns=column_headers(row)
+        if context["adi"] and columns:
+            header_columns=columns
+            header_y=row["y"]
         if not (context["adi"] and context["kind"]):
             continue
-        # Matrícula e nome precisam estar na MESMA linha visual.
-        matches=[m for m in dict.fromkeys(MAT.findall(line)) if m in base]
-        if len(matches)!=1:
+        mats=list(dict.fromkeys(m for m in MAT.findall(line) if m in base))
+        if len(mats)!=1:
             continue
-        mat=matches[0]
+        mat=mats[0]
         person=base[mat].get("SERVIDOR","")
         if not matches_name(line,person):
             continue
-        # Evita captar matrícula citada como referência a outro servidor.
-        # Recorta a linha visual exatamente na matrícula correspondente.
-        pos=line.find(mat)
-        own=line[pos:] if pos>=0 else line
+        own=line[line.find(mat):]
         if not matches_name(own,person):
             continue
-        year=year_context(line)
-        if year=="INDETERMINADO":
-            year=context.get("year","INDETERMINADO")
-        # Se vários anos aparecem no cabeçalho, não escolher um arbitrariamente.
-        # A nota e código só podem ser interpretados depois da identificação
-        # explícita de colunas, que segue pendente nesta versão.
-        excerpt=r["text"][:1300]
-        yield {
-            "tipo":context["kind"],"matricula":mat,"servidor":person,
-            "ano":year,"base_valor":base[mat].get("NOTA "+year,"") if year in YEARS else "",
-            "trecho":excerpt,"nota":"","codigo":"",
-            "status":"PENDENTE - CONFERIR COLUNAS/EXERCICIO",
-            "contexto":context.get("header","")[:1000]
-        }
-    return
+        # Cabeçalho de colunas só vale abaixo dele e até distância limitada.
+        mapped=aligned_scores(row,header_columns) if 0 < row["y"]-header_y < 500 else {}
+        if mapped:
+            items=[(year,value) for year,value in sorted(mapped.items())]
+        else:
+            year=year_context(line)
+            if year=="INDETERMINADO":
+                year=context["year"]
+            items=[(year,"")]
+        for year,value in items:
+            status=("PENDENTE - VALIDAR COLUNA E ATO" if value else
+                    "PENDENTE - EXERCICIO/COLUNAS")
+            yield {"tipo":context["kind"],"matricula":mat,"servidor":person,
+                "ano":year,"base_valor":base[mat].get("NOTA "+year,"") if year in YEARS else "",
+                "trecho":row["text"][:1300],
+                "nota":value if value and not value.startswith("C") else "",
+                "codigo":value if value.startswith("C") else "",
+                "status":status,
+                "contexto":(context["header"]+" | COLUNAS: "+str(header_columns))[:1000]}
 
 def scan_one(path, base):
     con = connect()
