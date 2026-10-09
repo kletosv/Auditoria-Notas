@@ -14,7 +14,7 @@ from pathlib import Path
 import fitz
 
 DB = "auditoria.sqlite3"
-ENGINE_VERSION = "4.0-pdc-contexto-linha-20261009"
+ENGINE_VERSION = "5.0-layout-cabecalho-20261009"
 YEARS = tuple(str(x) for x in range(2019, 2026))
 MAT = re.compile(r"(?<!\d)\d{7,11}(?!\d)")
 ACT = re.compile(r"^\s*(?:EDITAL|RESOLUCAO|PORTARIA|DECRETO|EXTRATO|AVISO|DESPACHO|ATO|REPUBLICACAO|RETIFICACAO)\b")
@@ -123,73 +123,88 @@ def matches_name(text, name):
     return bool(words) and sum(bool(re.search(r"\b" + re.escape(w) + r"\b", text)) for w in words) >= min(2, len(words))
 
 
-def extract_candidates(page, base):
-    """Contexto do ato e linha; nunca inferir nota nova de texto solto.
 
-    Conservador: PDF com colunas mescladas permanece pendente; não
-    converter Cxxx para número nem assumir exercício pelo ano do DOE.
+def visual_rows(page, tolerance=3.3):
+    """Reconstrói linhas pela coordenada Y das palavras, não pelo texto corrido."""
+    words=sorted(page.get_text("words"), key=lambda w:(round(w[3]/tolerance),w[0]))
+    rows=[]
+    for w in words:
+        x0,y0,x1,y1,t,*_=w
+        cy=(y0+y1)/2
+        if rows and abs(rows[-1]["y"]-cy)<=tolerance:
+            rows[-1]["words"].append((x0,t))
+        else:
+            rows.append({"y":cy,"words":[(x0,t)]})
+    for r in rows:
+        r["words"].sort(key=lambda x:x[0])
+        r["text"]=" ".join(t for _,t in r["words"])
+    return rows
+
+
+def extract_candidates(page, base, inherited=None):
+    """Extrai candidatos por linha visual, com contexto explícito.
+
+    Não infere o exercício do ano do DOE. Não interpreta a sequência
+    de notas como anos sem cabeçalho de colunas inequívoco.
     """
-    raw = page.get_text("text", sort=True)
-    lines = [x.strip() for x in raw.splitlines() if x.strip()]
-    norms = [normalize(x) for x in lines]
-    # O ato pode iniciar na página anterior: sem cabeçalho local não
-    # atribuímos 'retificação' automaticamente a matrículas desta página.
-    act_start = 0
-    adi = False
-    kind = None
-    header = []
-    for i, line in enumerate(norms):
+    rows=visual_rows(page)
+    context=dict(inherited or {"adi":False,"kind":None,"year":"INDETERMINADO","header":""})
+    # Contexto herdado de página anterior é usado apenas como pista,
+    # nunca como prova de ato na página atual.
+    saw_adi=False
+    recent=[]
+    for idx,r in enumerate(rows):
+        line=normalize(r["text"])
+        recent.append(line)
+        recent=recent[-24:]
         if ACT.search(line):
-            act_start = i
-            adi = False
-            kind = None
-            header = []
-        if i - act_start <= 50:
-            header.append(line)
-            if ADI.search(line):
-                adi = True
-            for label, pattern in KIND.items():
-                if pattern.search(line):
-                    kind = label
-                    break
-        if not (adi and kind) or BAD.search(line):
+            context={"adi":False,"kind":None,"year":"INDETERMINADO","header":line}
+            recent=[line]
+        if ADI.search(line):
+            context["adi"]=True
+            saw_adi=True
+            context["header"]=(context.get("header","")+" | "+line)[-1100:]
+        for label,pattern in KIND.items():
+            if pattern.search(line):
+                context["kind"]=label
+                context["header"]=(context.get("header","")+" | "+line)[-1100:]
+                break
+        explicit=year_context(" ".join(recent))
+        if explicit!="INDETERMINADO":
+            context["year"]=explicit
+        if BAD.search(line):
             continue
-        mats = list(dict.fromkeys(m for m in MAT.findall(line) if m in base))
-        if len(mats) != 1:
+        if not (context["adi"] and context["kind"]):
             continue
-        mat = mats[0]
-        # Não usar linha seguinte se ela contiver matrícula de outro servidor.
-        next_line = norms[i + 1] if i + 1 < len(norms) else ""
-        if any(m != mat and m in base for m in MAT.findall(next_line)):
-            next_line = ""
-        combined = line + " " + next_line
-        person = base[mat].get("SERVIDOR", "")
-        if not matches_name(combined, person):
+        # Matrícula e nome precisam estar na MESMA linha visual.
+        matches=[m for m in dict.fromkeys(MAT.findall(line)) if m in base]
+        if len(matches)!=1:
             continue
-        year = year_context(" ".join(header))
-        local_year = year_context(line)
-        if local_year != "INDETERMINADO":
-            year = local_year
-        # Trecho não ultrapassa a linha seguinte para evitar mesclar servidores.
-        excerpt = " | ".join(lines[max(act_start, i - 1):i + 1])[:1200]
-        values = SCORE.findall(line)
-        note = ""
-        code = ""
-        if len(values) == 1:
-            if values[0].startswith("C"):
-                code = values[0]
-            else:
-                note = values[0]
-        # Muitos valores por linha podem ser notas de exercícios distintos;
-        # deixar vazio e encaminhar para revisão.
-        confidence = "PENDENTE - EXERCICIO" if year == "INDETERMINADO" else "PENDENTE - VALIDAR LINHA E ATO"
+        mat=matches[0]
+        person=base[mat].get("SERVIDOR","")
+        if not matches_name(line,person):
+            continue
+        # Evita captar matrícula citada como referência a outro servidor.
+        # Recorta a linha visual exatamente na matrícula correspondente.
+        pos=line.find(mat)
+        own=line[pos:] if pos>=0 else line
+        if not matches_name(own,person):
+            continue
+        year=year_context(line)
+        if year=="INDETERMINADO":
+            year=context.get("year","INDETERMINADO")
+        # Se vários anos aparecem no cabeçalho, não escolher um arbitrariamente.
+        # A nota e código só podem ser interpretados depois da identificação
+        # explícita de colunas, que segue pendente nesta versão.
+        excerpt=r["text"][:1300]
         yield {
-            "tipo": kind, "matricula": mat, "servidor": person,
-            "ano": year, "base_valor": base[mat].get("NOTA " + year, "") if year in YEARS else "",
-            "trecho": excerpt, "nota": note, "codigo": code,
-            "status": confidence, "contexto": " | ".join(header[:15])[:1000]
+            "tipo":context["kind"],"matricula":mat,"servidor":person,
+            "ano":year,"base_valor":base[mat].get("NOTA "+year,"") if year in YEARS else "",
+            "trecho":excerpt,"nota":"","codigo":"",
+            "status":"PENDENTE - CONFERIR COLUNAS/EXERCICIO",
+            "contexto":context.get("header","")[:1000]
         }
-
+    return
 
 def scan_one(path, base):
     con = connect()
