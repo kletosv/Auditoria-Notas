@@ -1,4 +1,4 @@
-"""Dashboard SIDA/ELÚCIDA — apresentação e triagem; Engine 7.1 permanece intacta."""
+"""Dashboard SIDA/ELÚCIDA — apresentação e triagem; Engine 8.0 permanece intacta."""
 from pathlib import Path
 import hashlib
 import io
@@ -12,6 +12,7 @@ import pandas as pd
 import streamlit as st
 import engine
 from relatorios import excel_bytes
+from historico import construir
 
 st.set_page_config(page_title="Auditoria SIDA / ELÚCIDA", page_icon="🐜", layout="wide")
 st.markdown("""<style>
@@ -20,7 +21,7 @@ st.markdown("""<style>
 [data-testid="stMetricLabel"]{font-size:.95rem}
 </style>""", unsafe_allow_html=True)
 st.title("🐜 Auditoria SIDA / ELÚCIDA")
-st.caption("Painel de acompanhamento documental • Engine 7.1 • relatório Excel por ocorrência • localização ≠ validação ≠ conclusão")
+st.caption("Painel de acompanhamento documental • Engine 8.0 • relatório Excel por ocorrência • localização ≠ validação ≠ conclusão")
 st.warning("Os resultados são CANDIDATOS, não correções confirmadas. Não altere a Base Geral com base nesta triagem. O Streamlit Cloud não garante armazenamento persistente e este protótipo não é repositório oficial de dados pessoais.")
 
 # Manter os dados enviados apenas na sessão/instância do aplicativo.
@@ -81,6 +82,7 @@ except Exception as exc:
     st.error(f"Erro ao consultar o banco de dados: {exc}")
     st.stop()
 
+timeline, per_matricula = construir(hits, detail)
 n_complete=int((docs.status=="EXTRACAO CONCLUIDA - REVISAR").sum()) if not docs.empty else 0
 n_incomplete=int((docs.status=="PESQUISA INCOMPLETA").sum()) if not docs.empty else 0
 n_undetermined=int((hits.Ano.astype(str)=="INDETERMINADO").sum()) if not hits.empty else 0
@@ -91,7 +93,21 @@ m3.metric("Candidatos à revisão",len(hits))
 m4.metric("Exercício indeterminado",n_undetermined)
 st.caption(f"Versão registrada: {meta[0] if meta else 'não informada'} • Pesquisa incompleta: {n_incomplete} • Correções homologadas: nenhuma registrada por este protótipo")
 
-tab_docs,tab_hits,tab_compare,tab_audit,tab_about=st.tabs(["📚 Cobertura dos DOEs","🔎 Candidatos e filtros","⚖️ Comparação exploratória","🗂️ Auditoria de divergências","ℹ️ Critérios e limites"])
+tab_docs,tab_hits,tab_compare,tab_audit,tab_history,tab_about=st.tabs(["📚 Cobertura dos DOEs","🔎 Candidatos e filtros","⚖️ Comparação exploratória","🗂️ Auditoria de divergências","🕰️ Histórico por matrícula","ℹ️ Critérios e limites"])
+with tab_history:
+    st.subheader("Histórico documental por matrícula — preliminar")
+    st.warning("A sequência de DOE é apenas cronológica. Não comprova vigência, revogação ou inexistência de atos posteriores. Campos não comprovados permanecem em branco.")
+    if per_matricula.empty:
+        st.info("Nenhuma ocorrência disponível nesta instância.")
+    else:
+        pesquisa=st.text_input("Matrícula ou nome do servidor", key="historico_pesquisa")
+        filtered_summary=per_matricula.copy()
+        if pesquisa:
+            m=(filtered_summary["Matrícula"].astype(str)+" "+filtered_summary["Servidor"].astype(str)).str.contains(re.escape(pesquisa),case=False,na=False)
+            filtered_summary=filtered_summary[m]
+        st.dataframe(filtered_summary,hide_index=True,use_container_width=True)
+        selected_mats=filtered_summary["Matrícula"].astype(str).unique().tolist()
+        st.dataframe(timeline[timeline["Matrícula"].astype(str).isin(selected_mats)],hide_index=True,use_container_width=True)
 with tab_docs:
     st.subheader("Acompanhamento dos DOEs")
     if docs.empty:
@@ -304,7 +320,7 @@ st.caption("Abas: Resumo, Cobertura, Inclusão, Retificação, Republicação, A
 try:
     # A tabela de diferenças é reconstruída somente quando a associação ano/valor existe.
     export_diffs = differences[display_cols].copy() if "differences" in globals() and "display_cols" in globals() and not differences.empty else pd.DataFrame(columns=["DOE","Arquivo","Página","Tipo","Matrícula","Servidor","Ano","Nota na base","Valor extraído do DOE","Diferença aparente","Trecho","Situação"])
-    export_data = excel_bytes(docs,hits,export_diffs,st.session_state.sida_audit_records,meta[0] if meta else "")
+    export_data = excel_bytes(docs,hits,export_diffs,st.session_state.sida_audit_records,meta[0] if meta else "",timeline=timeline,per_matricula=per_matricula)
     st.download_button("⬇️ Baixar relatório completo (.xlsx)",data=export_data,file_name="Relatorio_Robo_Formiga_SIDA.xlsx",mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",key="sida_xlsx_full")
 except Exception as exc:
     st.error(f"Falha ao gerar o Excel: {type(exc).__name__}: {exc}")

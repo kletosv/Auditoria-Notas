@@ -14,13 +14,15 @@ from pathlib import Path
 import fitz
 
 DB = "auditoria.sqlite3"
-ENGINE_VERSION = "7.1-exercicios-2019-a-2024-20261013"
+ENGINE_VERSION = "8.0-historico-matricula-20261013"
 YEARS = tuple(str(x) for x in range(2019, 2025))
 MAT = re.compile(r"(?<!\d)\d{7,11}(?!\d)")
 ACT = re.compile(r"^\s*(?:EDITAL|RESOLUCAO|PORTARIA|DECRETO|EXTRATO|AVISO|DESPACHO|ATO|REPUBLICACAO|RETIFICACAO)\b")
 ADI = re.compile(r"\bADI\b|\bPGDI\b|AVALIACAO\s+(?:DE\s+)?DESEMPENHO|RESULTADO\s+(?:DA\s+)?AVALIACAO|NOTAS?\s+(?:DA\s+)?AVALIACAO")
 KIND = {
-    "ANULACAO": re.compile(r"\bANUL\w*|\bTORNA[R]?\s+SEM\s+EFEITO\b|\bDESCONSIDER\w*|\bCANCEL\w*"),
+    "TORNAR_SEM_EFEITO": re.compile(r"\bTORNA[R]?\s+SEM\s+EFEITO\b|\bTORNAD[AO]\s+SEM\s+EFEITO\b"),
+    "REVOGACAO": re.compile(r"\bREVOG\w*"),
+    "ANULACAO": re.compile(r"\bANUL\w*"),
     "RETIFICACAO": re.compile(r"\bRETIFIC\w*|\bONDE\s+CONSTA\b|\bPASSE\s+A\s+CONSTAR\b|\bCORRIG\w*"),
     "INCLUSAO": re.compile(r"\bINCLU\w*|\bACRESCENT\w*"),
     "REPUBLICACAO": re.compile(r"\bREPUBLIC\w*"),

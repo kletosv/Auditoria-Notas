@@ -1,34 +1,28 @@
-ATUALIZAÇÃO 9 — ESCOPO 2019 A 2024
+ROBÔ FORMIGA — ATUALIZAÇÃO 10 / HISTÓRICO DOCUMENTAL POR MATRÍCULA
 
-O motor audita exclusivamente exercícios 2019, 2020, 2021, 2022, 2023 e 2024. Publicações posteriores (2025/2026) permanecem pesquisáveis quando tratam de exercícios do escopo. Referências sem exercício comprovado permanecem INDETERMINADO para revisão; não atribuir ano por suposição.
+ATUALIZE NO GITHUB:
+- app.py
+- engine.py
+- relatorios.py
+- historico.py (NOVO)
+- requirements.txt
 
-ATENÇÃO: mudar a versão do motor reinicializa as tabelas ativas de extração no SQLite; exporte a auditoria manual anterior em CSV antes de atualizar.
+O relatório Excel passa a ter as abas POR MATRÍCULA e HISTÓRICO DOCUMENTAL.
+O motor diferencia REVOGAÇÃO, TORNAR SEM EFEITO e ANULAÇÃO.
+O escopo das notas permanece 2019 a 2024, com PDFs de anos posteriores permitidos.
 
-ROBÔ FORMIGA — ATUALIZAÇÃO 8 (13/10/2026)
+LIMITAÇÕES IMPORTANTES:
+- É uma primeira versão de triagem documental. Não confirma automaticamente qual nota está vigente.
+- Os campos 'Onde consta' e 'Passe a constar' são apenas pistas extraídas do texto,
+  exigindo conferência da tabela/cabeçalho e dos atos posteriores.
+- A pesquisa de atos posteriores só alcança os PDFs carregados e processados.
+- Não presume que uma nota foi revogada, anulada ou tornada sem efeito sem evidência.
+- Para histórico funcional amplo (cedência, readaptação etc.), é necessária evolução
+  da extração específica desses atos: esta versão registra os candidatos de ADI/PGDI.
+- O relatório não altera a Base Geral.
+- Troca de versão da Engine pode exigir reprocessar os PDFs; exporte antes
+  suas decisões manuais em CSV e guarde cópia do relatório anterior.
+- Streamlit Cloud não garante persistência local; mantenha os relatórios em local seguro.
 
-SUBSTITUIR/ADICIONAR NO GITHUB (raiz do repositório):
-- app.py          SUBSTITUIR
-- engine.py       SUBSTITUIR (mesma Engine 7.0; não altera versão nem reinicia deliberadamente a auditoria)
-- relatorios.py   ADICIONAR (NOVO)
-- requirements.txt SUBSTITUIR/ATUALIZAR
-
-Aguardar o Streamlit Cloud atualizar o aplicativo após o commit.
-Recarregar o lote de PDFs e a Base Geral somente se a sessão os tiver perdido.
-NÃO publicar os PDFs, CSV da Base Geral ou relatórios com dados pessoais no GitHub público.
-
-EXPORTAÇÃO:
-- Botão "Baixar relatório completo (.xlsx)" abaixo das abas.
-- Uma aba por tipo de ocorrência: INCLUSÃO, RETIFICAÇÃO, REPUBLICAÇÃO, ANULAÇÃO.
-- RESUMO, COBERTURA DOE, OUTRAS OCORRÊNCIAS, PENDÊNCIAS,
-  DIVERGÊNCIAS APARENTES, AUDITORIA MANUAL, CORREÇÕES CONFERIDAS.
-- Preserva matrícula e código como texto, filtros e cabeçalhos.
-- Não altera a Base Geral; não homologa automaticamente resultados.
-
-ATENÇÃO:
-- A aba CORREÇÕES CONFERIDAS reúne somente decisões humanas marcadas
-  "CORREÇÃO NECESSÁRIA" e registradas no painel; não são homologações oficiais.
-- O histórico de decisões continua exigindo download do CSV e restauração
-  em sessões posteriores. O .xlsx é relatório, não restaura automaticamente decisões.
-- O motor mantém prioridade para Atos de Pessoal do Poder Executivo, mas
-  percorre todas as páginas. Ano/código indeterminado continua pendente.
-- Não é possível comprovar a integridade de cada PDF apenas com o painel.
+TESTES: sintaxe Python e geração de planilha Excel com dados de teste.
+Ainda não validado no Streamlit Cloud ou com todo o lote de DOEs.
