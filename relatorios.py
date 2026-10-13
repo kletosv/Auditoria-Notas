@@ -42,6 +42,16 @@ def excel_bytes(docs, hits, differences=None, decisions=None, version="", timeli
     sheets["DIVERGÊNCIAS APARENTES"] = differences.drop(columns=["_doc","doc","page","matricula","exercicio","_base_num","_pub_num","chave"],errors="ignore")
     sheets["AUDITORIA MANUAL"] = audited
     if timeline is not None and not timeline.empty:
+        # Fila de trabalho explícita: evidências pendentes não são homologações.
+        work = timeline[[c for c in ["ID do evento","Matrícula","Servidor","Exercício","DOE","Página",
+          "Tipo de ocorrência","Campo afetado","Onde consta (texto do ato)",
+          "Passe a constar (texto do ato)","Eventos posteriores possíveis",
+          "Relação posterior","Pesquisa posterior no lote","Alerta de interpretação"] if c in timeline.columns]].copy()
+        work["Verificação do operador"] = "PENDENTE"
+        work["DOE de comprovação"] = ""
+        work["Página de comprovação"] = ""
+        work["Conclusão fundamentada"] = ""
+        sheets["FILA CONFERÊNCIA"] = work
         sheets["ATOS POSTERIORES POSSÍVEIS"] = timeline[timeline["Eventos posteriores possíveis"].astype(str).str.len()>0].copy()
         sheets["ALERTAS INTERPRETAÇÃO"] = timeline[timeline["Alerta de interpretação"].astype(str).str.len()>0].copy()
     sheets["CORREÇÕES CONFERIDAS"] = corrections

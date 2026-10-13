@@ -1,38 +1,27 @@
-ROBÔ FORMIGA — ATUALIZAÇÃO 12 — HISTÓRICO DOCUMENTAL (13/10/2026)
+ROBÔ FORMIGA — ATUALIZAÇÃO 13 (incremental e conservadora)
 
-Instalação: no repositório GitHub Auditoria-Notas, substitua app.py,
-historico.py e relatorios.py pelos arquivos deste pacote.
-engine.py e requirements.txt seguem incluídos para referência/instalação completa.
-Antes de atualizar, salve os CSVs de decisões manuais e o Excel anterior.
+INSTALAÇÃO
+1. Faça backup do GitHub e exporte as decisões manuais do Streamlit.
+2. Substitua app.py, historico.py e relatorios.py pelos arquivos deste ZIP.
+3. Mantenha engine.py e requirements.txt atuais, se já estiver na Atualização 12.
+4. Reinicie o Streamlit se necessário. Gere novo relatório Excel.
 
-O QUE MUDOU
-1. CONSOLIDADO MATRÍCULA: uma linha por matrícula/exercício (2019 a 2024),
-   sem aba duplicada POR MATRÍCULA.
-2. HISTÓRICO DOCUMENTAL: adiciona IDs de eventos anteriores e posteriores
-   possíveis, somente quando são da mesma matrícula e exercício e aparecem
-   em edições diferentes do DOE.
-3. ATOS POSTERIORES POSSÍVEIS: fila de conferência dos vínculos cronológicos.
-4. ALERTAS INTERPRETAÇÃO: média de período, exercício indeterminado e
-   atos que exigem verificar o alcance documental.
-5. Mantém ANULAÇÃO, REVOGAÇÃO e TORNAR SEM EFEITO como classes distintas.
-6. Não confirma automaticamente valores vigentes ou revogados.
+MELHORIAS REAIS
+- Aba FILA CONFERÊNCIA, com uma linha por evento e colunas para registrar evidências e conclusões humanas.
+- Histórico passa a indicar motivo da associação cronológica entre eventos da mesma matrícula e exercício.
+- Consolidado informa quantidade de eventos com atos posteriores possíveis e ação recomendada.
+- Mantidas as abas e o recorte de 2019 a 2024; não altera a Base Geral.
+- Retificação, revogação, anulação e tornar sem efeito continuam categorias distintas.
 
 LIMITES IMPORTANTES
-- O vínculo cronológico é uma HIPÓTESE, não prova de que um ato altera outro.
-- A varredura abrange apenas os PDFs enviados na sessão. Ausência de publicação
-  posterior nesse lote NÃO comprova inexistência em outros DOEs/suplementos.
-- Os pares Onde consta/Passe a constar só aparecem se ambos constarem no
-  mesmo trecho extraído; tabelas em páginas diferentes seguem pendentes.
-- O motor de leitura (engine.py) foi PRESERVADO nesta versão. Ele ainda não
-  reconstrói o vínculo de atos por número/data/objeto; portanto esta versão
-  NÃO resolve integralmente a interpretação documental.
-- O consolidado inclui apenas matrículas com ocorrência localizada, e as
-  notas da Base Geral ficam vazias nos exercícios sem evento associado.
-  Não se deve interpretar esse vazio como ausência de nota na Base Geral.
-- A planilha original da Base Geral não é modificada.
-- Recomendamos NÃO reiniciar a extração: engine.py mantém a mesma versão do
-  banco SQLite, preservando os dados da execução atual se ainda disponíveis.
+- A Atualização 13 NÃO implementa uma pesquisa exaustiva de atos posteriores, nem confirma automaticamente
+  qual publicação prevalece. A relação entre DOEs é apenas uma pista cronológica.
+- Onde consta / Passe a constar só é preenchido se ambos constarem do trecho extraído pelo motor.
+  Para extrair tabelas e atos complexos, será preciso alterar e validar a leitura dos PDFs.
+- Não considera 'sem evento encontrado' prova de inexistência de publicação.
+- Não considerar valores extraídos como notas vigentes sem conferência do DOE original e suplementos.
+- O banco SQLite do Streamlit Cloud pode ser temporário: exporte seus dados antes de atualizar.
 
-TESTES
-- Sintaxe dos módulos e geração de XLSX com dados sintéticos.
-- Não foi feita homologação das ocorrências contra todos os DOEs originais.
+VALIDAÇÃO
+- Sintaxe dos módulos verificada; exportação XLSX testada com casos sintéticos.
+- Não houve validação de cada ato dos PDFs reais nem execução no seu Streamlit Cloud.

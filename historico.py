@@ -18,7 +18,8 @@ EVENT_COLS = [
  'Ato anterior relacionado','Ato posterior relacionado','Situação da cadeia',
  'Estado documental','Trecho da publicação','Contexto do ato',
  'Eventos anteriores possíveis','Eventos posteriores possíveis',
- 'Pesquisa posterior no lote','Alerta de interpretação']
+ 'Pesquisa posterior no lote','Alerta de interpretação',
+ 'Relação posterior','Motivo da relação','Conferência exigida']
 SUMMARY_COLS = [
  'Matrícula','Servidor','Exercício','Nota na Base Geral',
  'Notas anuais publicadas (candidatas)','Códigos publicados (candidatos)',
@@ -27,7 +28,8 @@ SUMMARY_COLS = [
  'Nota documental vigente (confirmada)','Total de eventos','Primeiro DOE localizado',
  'Último DOE localizado','Cobertura posterior','Situação da vigência',
  'IDs dos eventos','Referências DOE/página','Eventos posteriores possíveis',
- 'Tipos de ocorrências','Alerta de interpretação']
+ 'Tipos de ocorrências','Alerta de interpretação',
+ 'Quantidade de atos posteriores possíveis','Ação recomendada']
 
 def s(v):
     if v is None: return ''
@@ -91,7 +93,8 @@ def construir(hits, details):
             field_hint(s(h.get('Trecho'))+' '+context),s(h.get('Nota na base')),notes,codes,
             onde,passe,'','','','','NÃO VERIFICADA — PESQUISAR PUBLICAÇÕES POSTERIORES',
             'CANDIDATO DOCUMENTAL — NÃO HOMOLOGADO',s(h.get('Trecho')),context,
-            '','','NÃO COMPROVADA — LOTE PARCIAL','; '.join(alert)])))
+            '','','NÃO COMPROVADA — LOTE PARCIAL','; '.join(alert),
+            'NÃO COMPROVADA','', 'VERIFICAR ATO INTEGRAL E ALCANCE DA ALTERAÇÃO'])))
     timeline=pd.DataFrame(events,columns=EVENT_COLS).drop_duplicates(subset=['ID do evento'])
     if timeline.empty:
         return timeline,pd.DataFrame(columns=SUMMARY_COLS)
@@ -109,6 +112,8 @@ def construir(hits, details):
             # Mesma edição não significa ato posterior; ordenar somente entre edições diferentes.
             timeline.at[idx,'Eventos anteriores possíveis']=unique(earlier['ID do evento'],1000)
             timeline.at[idx,'Eventos posteriores possíveis']=unique(later['ID do evento'],1000)
+            timeline.at[idx,'Relação posterior']=('POSSÍVEL — NÃO COMPROVADA' if len(later) else 'NENHUMA RELAÇÃO DEMONSTRADA')
+            timeline.at[idx,'Motivo da relação']=('MESMA MATRÍCULA E EXERCÍCIO; DOE NUMERICAMENTE POSTERIOR' if len(later) else '')
             timeline.at[idx,'Pesquisa posterior no lote']=('HÁ CANDIDATOS EM DOE POSTERIOR — EXAMINAR' if len(later) else
                 'NÃO LOCALIZADO NESTE LOTE — NÃO PROVA AUSÊNCIA')
     timeline=timeline.drop(columns=['_ord','_page'])
@@ -130,5 +135,8 @@ def construir(hits, details):
                 s(g.iloc[0]['DOE']) if len(g) else '',s(g.iloc[-1]['DOE']) if len(g) else '',
                 'NÃO COMPROVADA PARA TODO O UNIVERSO DOCUMENTAL',state,
                 unique(g['ID do evento']),refs,unique(g['Eventos posteriores possíveis']),
-                unique(g['Tipo de ocorrência']),unique(g['Alerta de interpretação'])])
+                unique(g['Tipo de ocorrência']),unique(g['Alerta de interpretação']),
+                int(g['Eventos posteriores possíveis'].astype(str).str.len().gt(0).sum()),
+                ('REVISAR ATOS POSTERIORES E O ALCANCE DA RETIFICAÇÃO' if len(g) else
+                 'CONFERIR BASE GERAL E PESQUISAR PUBLICAÇÕES DO EXERCÍCIO')])
     return timeline,pd.DataFrame(summary,columns=SUMMARY_COLS)
