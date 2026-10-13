@@ -1,27 +1,19 @@
-ROBÔ FORMIGA — ATUALIZAÇÃO 13 (incremental e conservadora)
+ROBÔ FORMIGA — ETAPA 15: PROVA DOCUMENTAL CONTROLADA
 
-INSTALAÇÃO
-1. Faça backup do GitHub e exporte as decisões manuais do Streamlit.
-2. Substitua app.py, historico.py e relatorios.py pelos arquivos deste ZIP.
-3. Mantenha engine.py e requirements.txt atuais, se já estiver na Atualização 12.
-4. Reinicie o Streamlit se necessário. Gere novo relatório Excel.
+Este pacote NÃO é uma atualização de produção do Streamlit. NÃO substitua app.py, engine.py, historico.py ou relatorios.py.
 
-MELHORIAS REAIS
-- Aba FILA CONFERÊNCIA, com uma linha por evento e colunas para registrar evidências e conclusões humanas.
-- Histórico passa a indicar motivo da associação cronológica entre eventos da mesma matrícula e exercício.
-- Consolidado informa quantidade de eventos com atos posteriores possíveis e ação recomendada.
-- Mantidas as abas e o recorte de 2019 a 2024; não altera a Base Geral.
-- Retificação, revogação, anulação e tornar sem efeito continuam categorias distintas.
+Foi testado o DOE 11.575 de 05/08/2024, Edital 44/2024, páginas 16-17, retificação das notas de 2022.
+O extrator conseguiu parear 9 matrículas entre as tabelas 'Onde consta' e 'Passe a constar'.
+O CSV e Excel registram as notas anteriores e posteriores publicadas naquele ato.
 
-LIMITES IMPORTANTES
-- A Atualização 13 NÃO implementa uma pesquisa exaustiva de atos posteriores, nem confirma automaticamente
-  qual publicação prevalece. A relação entre DOEs é apenas uma pista cronológica.
-- Onde consta / Passe a constar só é preenchido se ambos constarem do trecho extraído pelo motor.
-  Para extrair tabelas e atos complexos, será preciso alterar e validar a leitura dos PDFs.
-- Não considera 'sem evento encontrado' prova de inexistência de publicação.
-- Não considerar valores extraídos como notas vigentes sem conferência do DOE original e suplementos.
-- O banco SQLite do Streamlit Cloud pode ser temporário: exporte seus dados antes de atualizar.
+LIMITAÇÕES:
+- Não foram investigadas publicações posteriores nem vigência final.
+- Os nomes vêm de extração de texto e podem apresentar quebra/truncamento; conferir visualmente.
+- O extrator é específico para a estrutura do Edital 44/2024; não foi homologado para outros atos.
+- A nota de 98934021 permanece 100,00 em ambas as tabelas: não concluir alteração de nota.
 
-VALIDAÇÃO
-- Sintaxe dos módulos verificada; exportação XLSX testada com casos sintéticos.
-- Não houve validação de cada ato dos PDFs reais nem execução no seu Streamlit Cloud.
+COMO REPRODUZIR:
+python teste_controlado.py "caminho/para/15 DO 11.575 Retificação ADM e PROf _05_08_2024.pdf"
+Requer PyMuPDF (fitz). Gera CSV. O Excel já acompanha o pacote.
+
+PRÓXIMO PASSO: validar visualmente os nove registros e testar a associação de publicações posteriores antes de integrar no motor de produção.
