@@ -1,4 +1,4 @@
-"""Dashboard SIDA/ELÚCIDA — apresentação e triagem; Engine 7.0 permanece intacta."""
+"""Dashboard SIDA/ELÚCIDA — apresentação e triagem; Engine 7.1 permanece intacta."""
 from pathlib import Path
 import hashlib
 import io
@@ -20,7 +20,7 @@ st.markdown("""<style>
 [data-testid="stMetricLabel"]{font-size:.95rem}
 </style>""", unsafe_allow_html=True)
 st.title("🐜 Auditoria SIDA / ELÚCIDA")
-st.caption("Painel de acompanhamento documental • Engine 7.0 • relatório Excel por ocorrência • localização ≠ validação ≠ conclusão")
+st.caption("Painel de acompanhamento documental • Engine 7.1 • relatório Excel por ocorrência • localização ≠ validação ≠ conclusão")
 st.warning("Os resultados são CANDIDATOS, não correções confirmadas. Não altere a Base Geral com base nesta triagem. O Streamlit Cloud não garante armazenamento persistente e este protótipo não é repositório oficial de dados pessoais.")
 
 # Manter os dados enviados apenas na sessão/instância do aplicativo.

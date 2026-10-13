@@ -1,4 +1,4 @@
-"""SIDA/ELÚCIDA — motor 7.0 (triagem documental, não homologação).
+"""SIDA/ELÚCIDA — motor 7.1 (triagem documental, não homologação).
 
 Compatível com app.py existente: connect(), run_folder(folder, base_csv).
 Somente PDFs fornecidos pelo usuário. Não altera a Base Geral.
@@ -14,8 +14,8 @@ from pathlib import Path
 import fitz
 
 DB = "auditoria.sqlite3"
-ENGINE_VERSION = "7.0-prioridade-atos-pessoal-historico-20261013"
-YEARS = tuple(str(x) for x in range(2019, 2026))
+ENGINE_VERSION = "7.1-exercicios-2019-a-2024-20261013"
+YEARS = tuple(str(x) for x in range(2019, 2025))
 MAT = re.compile(r"(?<!\d)\d{7,11}(?!\d)")
 ACT = re.compile(r"^\s*(?:EDITAL|RESOLUCAO|PORTARIA|DECRETO|EXTRATO|AVISO|DESPACHO|ATO|REPUBLICACAO|RETIFICACAO)\b")
 ADI = re.compile(r"\bADI\b|\bPGDI\b|AVALIACAO\s+(?:DE\s+)?DESEMPENHO|RESULTADO\s+(?:DA\s+)?AVALIACAO|NOTAS?\s+(?:DA\s+)?AVALIACAO")
@@ -26,7 +26,7 @@ KIND = {
     "REPUBLICACAO": re.compile(r"\bREPUBLIC\w*"),
 }
 BAD = re.compile(r"\b(?:LICITACAO|PREGAO|CONTRATO|ORCAMENTARI[AO]|EMPENHO|NOTA\s+FISCAL|EXTRATO\s+DE\s+CONTRATO)\b")
-YEAR_LABEL = re.compile(r"\b(?:EXERCICIO|ANO\s+(?:DA\s+)?AVALIACAO|ADI\s+(?:DE\s+)?|PGDI\s+(?:DE\s+)?|AVALIACAO\s+DE\s+DESEMPENHO\s+(?:DE\s+)?)[\s:–-]*(20(?:19|20|21|22|23|24|25))\b")
+YEAR_LABEL = re.compile(r"\b(?:EXERCICIO|ANO\s+(?:DA\s+)?AVALIACAO|ADI\s+(?:DE\s+)?|PGDI\s+(?:DE\s+)?|AVALIACAO\s+DE\s+DESEMPENHO\s+(?:DE\s+)?)[\s:–-]*(20(?:19|20|21|22|23|24))\b")
 SCORE = re.compile(r"(?<![\w,.])(?:100(?:[,.]00)?|(?:[0-9]|[1-9][0-9])[,\.][0-9]{1,2}|C[0-9]{3})(?!\w)")
 PRIORITY_SECTION = re.compile(r"ATOS\s+DE\s+PESSOAL\s+DO\s+PODER\s+EXECUTIVO", re.I)
 DOC_NUM = re.compile(r"(?<!\d)(1[012][._\s]?\d{3})(?!\d)")
@@ -154,7 +154,7 @@ def column_headers(row):
     line = normalize(row["text"])
     if re.search(r"\b(?:PUBLICACAO|DIARIO OFICIAL|DATA|DOE)\b",line):
         return {}
-    if not (re.search(r"\b(?:NOTA|AVALIACAO|EXERCICIO|MEDIA|ANO|2019|2020|2021|2022|2023|2024|2025)\b",line)):
+    if not (re.search(r"\b(?:NOTA|AVALIACAO|EXERCICIO|MEDIA|ANO|2019|2020|2021|2022|2023|2024)\b",line)):
         return {}
     found={}
     for x0,x1,word in row["words"]:
