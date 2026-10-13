@@ -316,7 +316,7 @@ with tab_audit:
 # Dados desta instância; não inclui PDFs ou informações de outros lotes.
 st.divider()
 st.subheader("📥 Relatório completo — Excel por tipo de ocorrência")
-st.caption("Abas: Resumo, Cobertura, Inclusão, Retificação, Republicação, Anulação, Outras ocorrências, Pendências, Divergências aparentes, Auditoria manual e Correções conferidas. Resultados automáticos não são homologados.")
+st.caption("Inclui CONSOLIDADO MATRÍCULA (uma linha por exercício 2019–2024), HISTÓRICO DOCUMENTAL, EXERCÍCIO INDETERMINADO e abas por tipo de ato. A vigência NÃO é presumida.")
 try:
     # A tabela de diferenças é reconstruída somente quando a associação ano/valor existe.
     export_diffs = differences[display_cols].copy() if "differences" in globals() and "display_cols" in globals() and not differences.empty else pd.DataFrame(columns=["DOE","Arquivo","Página","Tipo","Matrícula","Servidor","Ano","Nota na base","Valor extraído do DOE","Diferença aparente","Trecho","Situação"])

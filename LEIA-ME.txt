@@ -1,28 +1,21 @@
-ROBÔ FORMIGA — ATUALIZAÇÃO 10 / HISTÓRICO DOCUMENTAL POR MATRÍCULA
+ROBÔ FORMIGA — ATUALIZAÇÃO 11 (HISTÓRICO POR MATRÍCULA)
 
-ATUALIZE NO GITHUB:
-- app.py
-- engine.py
-- relatorios.py
-- historico.py (NOVO)
-- requirements.txt
+Instalação: no GitHub, substituir app.py, engine.py, historico.py, relatorios.py e requirements.txt pelos arquivos deste ZIP. Manter PDFs e Base Geral fora do repositório público. O Streamlit reiniciará automaticamente.
 
-O relatório Excel passa a ter as abas POR MATRÍCULA e HISTÓRICO DOCUMENTAL.
-O motor diferencia REVOGAÇÃO, TORNAR SEM EFEITO e ANULAÇÃO.
-O escopo das notas permanece 2019 a 2024, com PDFs de anos posteriores permitidos.
+PRINCIPAIS MUDANÇAS
+- CONSOLIDADO MATRÍCULA: uma linha por matrícula + exercício de 2019 a 2024, mesmo que não haja ocorrência associada àquele ano no lote.
+- HISTÓRICO DOCUMENTAL: uma linha por evento extraído, com ID estável, DOE, página, tipo, evidência e campos de confirmação separados.
+- EXERCÍCIO INDETERMINADO: eventos cuja vinculação anual ainda exige conferência.
+- Valores com indício de média de período não são automaticamente apresentados como notas anuais.
+- REVOGAÇÃO, TORNAR SEM EFEITO e ANULAÇÃO continuam em categorias diferentes.
+- Nenhuma nota é declarada vigente sem cadeia documental e pesquisa posterior comprovadas.
+- O histórico é exportado em Excel, sem alterar a Base Geral.
 
-LIMITAÇÕES IMPORTANTES:
-- É uma primeira versão de triagem documental. Não confirma automaticamente qual nota está vigente.
-- Os campos 'Onde consta' e 'Passe a constar' são apenas pistas extraídas do texto,
-  exigindo conferência da tabela/cabeçalho e dos atos posteriores.
-- A pesquisa de atos posteriores só alcança os PDFs carregados e processados.
-- Não presume que uma nota foi revogada, anulada ou tornada sem efeito sem evidência.
-- Para histórico funcional amplo (cedência, readaptação etc.), é necessária evolução
-  da extração específica desses atos: esta versão registra os candidatos de ADI/PGDI.
-- O relatório não altera a Base Geral.
-- Troca de versão da Engine pode exigir reprocessar os PDFs; exporte antes
-  suas decisões manuais em CSV e guarde cópia do relatório anterior.
-- Streamlit Cloud não garante persistência local; mantenha os relatórios em local seguro.
+LIMITES IMPORTANTES
+- Esta versão não faz pesquisa automática em DOEs que não foram enviados ao aplicativo. A coluna de cobertura posterior informa essa limitação.
+- Não reconstrói automaticamente todas as relações jurídicas entre atos nem extrai com precisão os valores das tabelas ONDE CONSTA/PASSE A CONSTAR; esses campos permanecem indícios/pendências quando não comprovados.
+- Uma linha por exercício não significa elegibilidade para avaliação naquele ano.
+- A versão do motor e o banco de extração não foram alterados; esta atualização modifica a consolidação e exportação. Assim, em princípio, não é necessário reprocessar PDFs já extraídos na mesma instância. Um redeploy do Streamlit Cloud pode perder o SQLite temporário.
+- Antes de atualizar, exportar decisões manuais e relatório atual.
 
-TESTES: sintaxe Python e geração de planilha Excel com dados de teste.
-Ainda não validado no Streamlit Cloud ou com todo o lote de DOEs.
+VALIDAÇÃO: compilação dos módulos e exportação Excel de amostra testadas localmente. Não houve teste no seu Streamlit Cloud nem validação jurídica de casos reais.

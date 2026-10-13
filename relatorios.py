@@ -30,8 +30,12 @@ def excel_bytes(docs, hits, differences=None, decisions=None, version="", timeli
         ["Escopo","Somente PDFs do lote carregado nesta execução; não consultar DOE externo automaticamente."],
     ],columns=["Indicador","Valor"])
     sheets = {"RESUMO":summary, "COBERTURA DOE":coverage}
-    if per_matricula is not None: sheets["POR MATRÍCULA"] = per_matricula
-    if timeline is not None: sheets["HISTÓRICO DOCUMENTAL"] = timeline
+    if per_matricula is not None:
+        sheets["CONSOLIDADO MATRÍCULA"] = per_matricula
+        sheets["POR MATRÍCULA"] = per_matricula
+    if timeline is not None:
+        sheets["HISTÓRICO DOCUMENTAL"] = timeline
+        sheets["EXERCÍCIO INDETERMINADO"] = timeline[timeline["Exercício"].astype(str)=="INDETERMINADO"].copy()
     for code,label in CATEGORIES.items():
         sheets[label] = hits[hits["Tipo"].astype(str).str.upper()==code].copy() if not hits.empty else hits.copy()
     sheets["OUTRAS OCORRÊNCIAS"] = hits[~hits["Tipo"].astype(str).str.upper().isin(CATEGORIES)].copy() if not hits.empty else hits.copy()
