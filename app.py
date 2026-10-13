@@ -21,7 +21,7 @@ st.markdown("""<style>
 [data-testid="stMetricLabel"]{font-size:.95rem}
 </style>""", unsafe_allow_html=True)
 st.title("🐜 Auditoria SIDA / ELÚCIDA")
-st.caption("Painel de acompanhamento documental • Engine 8.0 • relatório Excel por ocorrência • localização ≠ validação ≠ conclusão")
+st.caption("Painel de acompanhamento documental • Engine 8.0 • Histórico v12 • relatório Excel por ocorrência • localização ≠ validação ≠ conclusão")
 st.warning("Os resultados são CANDIDATOS, não correções confirmadas. Não altere a Base Geral com base nesta triagem. O Streamlit Cloud não garante armazenamento persistente e este protótipo não é repositório oficial de dados pessoais.")
 
 # Manter os dados enviados apenas na sessão/instância do aplicativo.
@@ -316,7 +316,7 @@ with tab_audit:
 # Dados desta instância; não inclui PDFs ou informações de outros lotes.
 st.divider()
 st.subheader("📥 Relatório completo — Excel por tipo de ocorrência")
-st.caption("Inclui CONSOLIDADO MATRÍCULA (uma linha por exercício 2019–2024), HISTÓRICO DOCUMENTAL, EXERCÍCIO INDETERMINADO e abas por tipo de ato. A vigência NÃO é presumida.")
+st.caption("Inclui CONSOLIDADO MATRÍCULA (uma linha por matrícula/exercício 2019–2024), HISTÓRICO DOCUMENTAL, ATOS POSTERIORES POSSÍVEIS e ALERTAS INTERPRETAÇÃO. Vínculos cronológicos são candidatos, não prova de revogação ou vigência.")
 try:
     # A tabela de diferenças é reconstruída somente quando a associação ano/valor existe.
     export_diffs = differences[display_cols].copy() if "differences" in globals() and "display_cols" in globals() and not differences.empty else pd.DataFrame(columns=["DOE","Arquivo","Página","Tipo","Matrícula","Servidor","Ano","Nota na base","Valor extraído do DOE","Diferença aparente","Trecho","Situação"])

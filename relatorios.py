@@ -32,7 +32,6 @@ def excel_bytes(docs, hits, differences=None, decisions=None, version="", timeli
     sheets = {"RESUMO":summary, "COBERTURA DOE":coverage}
     if per_matricula is not None:
         sheets["CONSOLIDADO MATRÍCULA"] = per_matricula
-        sheets["POR MATRÍCULA"] = per_matricula
     if timeline is not None:
         sheets["HISTÓRICO DOCUMENTAL"] = timeline
         sheets["EXERCÍCIO INDETERMINADO"] = timeline[timeline["Exercício"].astype(str)=="INDETERMINADO"].copy()
@@ -42,6 +41,9 @@ def excel_bytes(docs, hits, differences=None, decisions=None, version="", timeli
     sheets["PENDÊNCIAS"] = pending
     sheets["DIVERGÊNCIAS APARENTES"] = differences.drop(columns=["_doc","doc","page","matricula","exercicio","_base_num","_pub_num","chave"],errors="ignore")
     sheets["AUDITORIA MANUAL"] = audited
+    if timeline is not None and not timeline.empty:
+        sheets["ATOS POSTERIORES POSSÍVEIS"] = timeline[timeline["Eventos posteriores possíveis"].astype(str).str.len()>0].copy()
+        sheets["ALERTAS INTERPRETAÇÃO"] = timeline[timeline["Alerta de interpretação"].astype(str).str.len()>0].copy()
     sheets["CORREÇÕES CONFERIDAS"] = corrections
     buf=BytesIO()
     with pd.ExcelWriter(buf,engine="openpyxl") as writer:

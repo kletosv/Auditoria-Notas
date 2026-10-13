@@ -1,21 +1,38 @@
-ROBÔ FORMIGA — ATUALIZAÇÃO 11 (HISTÓRICO POR MATRÍCULA)
+ROBÔ FORMIGA — ATUALIZAÇÃO 12 — HISTÓRICO DOCUMENTAL (13/10/2026)
 
-Instalação: no GitHub, substituir app.py, engine.py, historico.py, relatorios.py e requirements.txt pelos arquivos deste ZIP. Manter PDFs e Base Geral fora do repositório público. O Streamlit reiniciará automaticamente.
+Instalação: no repositório GitHub Auditoria-Notas, substitua app.py,
+historico.py e relatorios.py pelos arquivos deste pacote.
+engine.py e requirements.txt seguem incluídos para referência/instalação completa.
+Antes de atualizar, salve os CSVs de decisões manuais e o Excel anterior.
 
-PRINCIPAIS MUDANÇAS
-- CONSOLIDADO MATRÍCULA: uma linha por matrícula + exercício de 2019 a 2024, mesmo que não haja ocorrência associada àquele ano no lote.
-- HISTÓRICO DOCUMENTAL: uma linha por evento extraído, com ID estável, DOE, página, tipo, evidência e campos de confirmação separados.
-- EXERCÍCIO INDETERMINADO: eventos cuja vinculação anual ainda exige conferência.
-- Valores com indício de média de período não são automaticamente apresentados como notas anuais.
-- REVOGAÇÃO, TORNAR SEM EFEITO e ANULAÇÃO continuam em categorias diferentes.
-- Nenhuma nota é declarada vigente sem cadeia documental e pesquisa posterior comprovadas.
-- O histórico é exportado em Excel, sem alterar a Base Geral.
+O QUE MUDOU
+1. CONSOLIDADO MATRÍCULA: uma linha por matrícula/exercício (2019 a 2024),
+   sem aba duplicada POR MATRÍCULA.
+2. HISTÓRICO DOCUMENTAL: adiciona IDs de eventos anteriores e posteriores
+   possíveis, somente quando são da mesma matrícula e exercício e aparecem
+   em edições diferentes do DOE.
+3. ATOS POSTERIORES POSSÍVEIS: fila de conferência dos vínculos cronológicos.
+4. ALERTAS INTERPRETAÇÃO: média de período, exercício indeterminado e
+   atos que exigem verificar o alcance documental.
+5. Mantém ANULAÇÃO, REVOGAÇÃO e TORNAR SEM EFEITO como classes distintas.
+6. Não confirma automaticamente valores vigentes ou revogados.
 
 LIMITES IMPORTANTES
-- Esta versão não faz pesquisa automática em DOEs que não foram enviados ao aplicativo. A coluna de cobertura posterior informa essa limitação.
-- Não reconstrói automaticamente todas as relações jurídicas entre atos nem extrai com precisão os valores das tabelas ONDE CONSTA/PASSE A CONSTAR; esses campos permanecem indícios/pendências quando não comprovados.
-- Uma linha por exercício não significa elegibilidade para avaliação naquele ano.
-- A versão do motor e o banco de extração não foram alterados; esta atualização modifica a consolidação e exportação. Assim, em princípio, não é necessário reprocessar PDFs já extraídos na mesma instância. Um redeploy do Streamlit Cloud pode perder o SQLite temporário.
-- Antes de atualizar, exportar decisões manuais e relatório atual.
+- O vínculo cronológico é uma HIPÓTESE, não prova de que um ato altera outro.
+- A varredura abrange apenas os PDFs enviados na sessão. Ausência de publicação
+  posterior nesse lote NÃO comprova inexistência em outros DOEs/suplementos.
+- Os pares Onde consta/Passe a constar só aparecem se ambos constarem no
+  mesmo trecho extraído; tabelas em páginas diferentes seguem pendentes.
+- O motor de leitura (engine.py) foi PRESERVADO nesta versão. Ele ainda não
+  reconstrói o vínculo de atos por número/data/objeto; portanto esta versão
+  NÃO resolve integralmente a interpretação documental.
+- O consolidado inclui apenas matrículas com ocorrência localizada, e as
+  notas da Base Geral ficam vazias nos exercícios sem evento associado.
+  Não se deve interpretar esse vazio como ausência de nota na Base Geral.
+- A planilha original da Base Geral não é modificada.
+- Recomendamos NÃO reiniciar a extração: engine.py mantém a mesma versão do
+  banco SQLite, preservando os dados da execução atual se ainda disponíveis.
 
-VALIDAÇÃO: compilação dos módulos e exportação Excel de amostra testadas localmente. Não houve teste no seu Streamlit Cloud nem validação jurídica de casos reais.
+TESTES
+- Sintaxe dos módulos e geração de XLSX com dados sintéticos.
+- Não foi feita homologação das ocorrências contra todos os DOEs originais.
