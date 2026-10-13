@@ -1,6 +1,9 @@
 """Dashboard SIDA/ELÚCIDA — apresentação e triagem; Engine 6.0 permanece intacta."""
 from pathlib import Path
 import hashlib
+import io
+import json
+from datetime import datetime, timezone
 import re
 import tempfile
 import unicodedata
@@ -83,7 +86,7 @@ m3.metric("Candidatos à revisão",len(hits))
 m4.metric("Exercício indeterminado",n_undetermined)
 st.caption(f"Versão registrada: {meta[0] if meta else 'não informada'} • Pesquisa incompleta: {n_incomplete} • Correções homologadas: nenhuma registrada por este protótipo")
 
-tab_docs,tab_hits,tab_compare,tab_about=st.tabs(["📚 Cobertura dos DOEs","🔎 Candidatos e filtros","⚖️ Comparação exploratória","ℹ️ Critérios e limites"])
+tab_docs,tab_hits,tab_compare,tab_audit,tab_about=st.tabs(["📚 Cobertura dos DOEs","🔎 Candidatos e filtros","⚖️ Comparação exploratória","🗂️ Auditoria de divergências","ℹ️ Critérios e limites"])
 with tab_docs:
     st.subheader("Acompanhamento dos DOEs")
     if docs.empty:
@@ -141,6 +144,130 @@ with tab_compare:
             st.metric("Diferenças aparentes para conferência",len(differences))
             st.dataframe(differences[display_cols],hide_index=True,use_container_width=True,height=450)
             st.download_button("Baixar diferenças aparentes (CSV)",differences[display_cols].to_csv(index=False,sep=";").encode("utf-8-sig"),"diferencas_aparentes_sida.csv","text/csv")
+
+# Registro manual de conferência. Não modifica as tabelas da Engine.
+# A persistência durável é feita por exportação/importação de CSV; não pelo disco do Streamlit.
+AUDIT_FIELDS=["chave","status","DOE","Arquivo","Página","Tipo","Matrícula","Servidor","Ano",
+              "Nota na base","Valor extraído do DOE","Nota validada","Código validado",
+              "DOE da evidência","Página da evidência","Ato/Edital","Evidência e histórico posterior",
+              "Responsável","Data UTC"]
+STATUS_OPTIONS=["PENDENTE","CONSISTENTE","CORREÇÃO NECESSÁRIA","INDETERMINADO / ANÁLISE HUMANA"]
+if "sida_audit_records" not in st.session_state:
+    st.session_state.sida_audit_records={}
+
+def row_key(row):
+    # Estável entre reprocessamentos com mesmo arquivo/linha/ano/valor.
+    identity=[str(row.get(k,"")) for k in ["Arquivo","Página","Tipo","Matrícula","Ano","Trecho","Valor extraído do DOE"]]
+    return hashlib.sha256(json.dumps(identity,ensure_ascii=False).encode("utf-8")).hexdigest()
+
+def audit_csv(records):
+    frame=pd.DataFrame(list(records.values()),columns=AUDIT_FIELDS)
+    return frame.to_csv(index=False,sep=";").encode("utf-8-sig")
+
+with tab_audit:
+    st.subheader("Auditoria de divergências — conferência humana")
+    st.info("As decisões abaixo são registros de conferência feitos pelo operador. Não são validações automáticas e não alteram a Base Geral. Para manter o trabalho após reinicializações, baixe o CSV de auditoria e importe-o na próxima sessão.")
+    upload_review=st.file_uploader("Restaurar auditoria anterior (CSV exportado por este painel)",type=["csv"],key="sida_review_import")
+    if upload_review is not None and st.button("Importar decisões de auditoria",key="sida_review_import_btn"):
+        try:
+            imported=pd.read_csv(io.BytesIO(upload_review.getvalue()),sep=";",encoding="utf-8-sig",dtype=str,keep_default_na=False)
+            if not {"chave","status"}.issubset(imported.columns):
+                raise ValueError("CSV sem as colunas obrigatórias chave e status")
+            count=0
+            for record in imported.to_dict("records"):
+                if record["status"] not in STATUS_OPTIONS:
+                    continue
+                key=record["chave"].strip()
+                if not re.fullmatch(r"[0-9a-f]{64}",key):
+                    continue
+                st.session_state.sida_audit_records[key]={k:str(record.get(k,"")) for k in AUDIT_FIELDS}
+                count+=1
+            st.success(f"{count} decisões importadas. Confirme se pertencem ao mesmo lote e versão.")
+        except Exception as exc:
+            st.error(f"Não foi possível importar: {exc}")
+
+    if hits.empty or detail.empty:
+        st.warning("Não há candidatos suficientes nesta instância para registrar conferências.")
+    else:
+        joined_audit=hits.merge(detail,left_on=["_doc","Página","Matrícula","Ano"],right_on=["doc","page","matricula","exercicio"],how="left")
+        def parse_num_audit(value):
+            value=str(value or "").strip()
+            if not re.fullmatch(r"\d{1,3}(?:[,\.]\d{1,2})?",value):
+                return None
+            return float(value.replace(",","."))
+        joined_audit["_base_num"]=joined_audit["Nota na base"].map(parse_num_audit)
+        joined_audit["_pub_num"]=joined_audit["nota_publicada"].map(parse_num_audit)
+        candidates=joined_audit[joined_audit._base_num.notna() & joined_audit._pub_num.notna()].copy()
+        candidates=candidates[(candidates._pub_num-candidates._base_num).abs()>0.00001].copy()
+        candidates=candidates.rename(columns={"nota_publicada":"Valor extraído do DOE"})
+        candidates["chave"]=candidates.apply(row_key,axis=1)
+        candidates=candidates.drop_duplicates(subset=["chave"]).reset_index(drop=True)
+        current_keys=set(candidates["chave"])
+        records=st.session_state.sida_audit_records
+        pending=sum(key not in records or records[key].get("status")=="PENDENTE" for key in current_keys)
+        consistent=sum(key in records and records[key].get("status")=="CONSISTENTE" for key in current_keys)
+        corrections=sum(key in records and records[key].get("status")=="CORREÇÃO NECESSÁRIA" for key in current_keys)
+        a,b,c=st.columns(3)
+        a.metric("Ainda pendentes",pending)
+        b.metric("Marcadas consistentes",consistent)
+        c.metric("Correções registradas pelo operador",corrections)
+        st.caption("Contagens relativas aos candidatos desta instância. Uma marcação manual não constitui homologação institucional.")
+        search=st.text_input("Localizar matrícula, servidor ou DOE",key="audit_search")
+        if search:
+            mask=(candidates["Matrícula"].astype(str)+" "+candidates["Servidor"].astype(str)+" "+candidates["DOE"].astype(str)).str.contains(re.escape(search),case=False,na=False)
+            candidates=candidates[mask]
+        show_cols=["DOE","Página","Tipo","Matrícula","Servidor","Ano","Nota na base","Valor extraído do DOE"]
+        st.dataframe(candidates[show_cols].head(500),hide_index=True,use_container_width=True,height=250)
+        if not candidates.empty:
+            choices=list(candidates.index)
+            def label_for(idx):
+                r=candidates.loc[idx]
+                return f"DOE {r['DOE']} • pág. {r['Página']} • {r['Matrícula']} • {r['Servidor']} • {r['Ano']}"
+            chosen=st.selectbox("Selecionar ocorrência para conferir",choices,format_func=label_for,key="audit_select")
+            r=candidates.loc[chosen]
+            key=r["chave"]
+            existing=records.get(key,{})
+            st.caption(f"Fonte inicial: {r['Arquivo']} — página {r['Página']} — tipo indicado: {r['Tipo']}")
+            st.code(str(r.get("Trecho","")),language=None)
+            with st.form("sida_audit_form"):
+                current_status=existing.get("status","PENDENTE")
+                status=st.selectbox("Resultado da conferência",STATUS_OPTIONS,index=STATUS_OPTIONS.index(current_status) if current_status in STATUS_OPTIONS else 0)
+                x,y=st.columns(2)
+                valid_note=x.text_input("Nota confirmada no DOE (se aplicável)",value=existing.get("Nota validada",""))
+                valid_code=y.text_input("Código confirmado (Cxxx, se aplicável)",value=existing.get("Código validado",""))
+                x,y=st.columns(2)
+                evidence_doe=x.text_input("DOE da evidência (número e suplemento)",value=existing.get("DOE da evidência",""))
+                evidence_page=y.text_input("Página da evidência",value=existing.get("Página da evidência",""))
+                act=st.text_input("Ato / edital / publicação",value=existing.get("Ato/Edital",""))
+                evidence=st.text_area("Evidência, conferência do cabeçalho e retificações posteriores",value=existing.get("Evidência e histórico posterior",""),height=120)
+                reviewer=st.text_input("Responsável pela conferência",value=existing.get("Responsável",""))
+                saved=st.form_submit_button("Salvar decisão nesta sessão",type="primary")
+            if saved:
+                confirmed=status in ("CONSISTENTE","CORREÇÃO NECESSÁRIA")
+                if confirmed and not (evidence_doe.strip() and evidence_page.strip() and act.strip() and evidence.strip() and reviewer.strip()):
+                    st.error("Para marcar como consistente ou correção necessária, informe DOE, página, ato, evidência e responsável.")
+                elif status=="CORREÇÃO NECESSÁRIA" and not (valid_note.strip() or valid_code.strip()):
+                    st.error("Para registrar correção necessária, informe a nota ou código documentalmente confirmado.")
+                else:
+                    records[key]={
+                        "chave":key,"status":status,"DOE":str(r["DOE"]),"Arquivo":str(r["Arquivo"]),
+                        "Página":str(r["Página"]),"Tipo":str(r["Tipo"]),"Matrícula":str(r["Matrícula"]),
+                        "Servidor":str(r["Servidor"]),"Ano":str(r["Ano"]),"Nota na base":str(r["Nota na base"]),
+                        "Valor extraído do DOE":str(r["Valor extraído do DOE"]),"Nota validada":valid_note,
+                        "Código validado":valid_code,"DOE da evidência":evidence_doe,"Página da evidência":evidence_page,
+                        "Ato/Edital":act,"Evidência e histórico posterior":evidence,"Responsável":reviewer,
+                        "Data UTC":datetime.now(timezone.utc).isoformat(timespec="seconds")}
+                    st.success("Decisão registrada nesta sessão. Baixe o CSV para preservar o histórico.")
+    if st.session_state.sida_audit_records:
+        all_records=st.session_state.sida_audit_records
+        st.download_button("⬇️ Baixar histórico de auditoria (CSV)",audit_csv(all_records),
+                           "historico_auditoria_sida.csv","text/csv",key="download_audit_history")
+        approved={k:v for k,v in all_records.items() if v.get("status")=="CORREÇÃO NECESSÁRIA"}
+        if approved:
+            st.download_button("⬇️ Baixar correções registradas (CSV)",audit_csv(approved),
+                               "correcoes_registradas_sida.csv","text/csv",key="download_audit_corrections")
+        st.caption("O CSV de correções é um registro de decisões humanas, não uma alteração automática da Base Geral.")
+
 with tab_about:
     st.markdown("""**Regras do painel**
 
@@ -152,5 +279,5 @@ with tab_about:
 - Não existe botão de aplicação automática de correções na Base Geral.
 - Não publique bases nominais nem PDFs contendo dados pessoais em repositório público.
 
-**Persistência:** o SQLite local pode ser apagado em reinicializações ou redeploys do Streamlit Community Cloud. Faça download dos CSVs de acompanhamento; esta interface não garante armazenamento durável.
+**Persistência:** o SQLite local pode ser apagado em reinicializações ou redeploys do Streamlit Community Cloud. A nova aba permite exportar e importar decisões de conferência em CSV; o arquivo deve ser mantido em armazenamento privado e seguro. Esta interface não garante armazenamento durável.
 """)
