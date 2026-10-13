@@ -28,9 +28,13 @@ with st.expander("1 · Carregar documentos e executar varredura", expanded=False
     base_upload=st.file_uploader("Base Geral (CSV)", type=["csv"], accept_multiple_files=False)
     pdf_uploads=st.file_uploader("PDFs do lote a auditar", type=["pdf"], accept_multiple_files=True)
     st.caption("Envie somente o lote pretendido. O motor processa os PDFs em ordem numérica crescente; não consulta o DOE na internet.")
-    execute=st.button("▶ Iniciar / retomar extração", type="primary", disabled=not(base_upload and pdf_uploads))
+    execute=st.button("▶ Iniciar / retomar extração", type="primary")
+    if base_upload is None or not pdf_uploads:
+        st.caption("Para iniciar, é necessário que a Base Geral (CSV) e pelo menos um PDF estejam carregados nesta sessão.")
 
-if execute:
+if execute and (base_upload is None or not pdf_uploads):
+    st.error("Os arquivos não estão disponíveis nesta sessão. Recarregue o CSV e os PDFs e tente novamente.")
+elif execute:
     with st.status("Executando extração documental…", expanded=True) as status:
         try:
             with tempfile.TemporaryDirectory(prefix="sida_") as tmp:
