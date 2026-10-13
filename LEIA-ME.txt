@@ -1,0 +1,28 @@
+ROBÔ FORMIGA — ATUALIZAÇÃO 8 (13/10/2026)
+
+SUBSTITUIR/ADICIONAR NO GITHUB (raiz do repositório):
+- app.py          SUBSTITUIR
+- engine.py       SUBSTITUIR (mesma Engine 7.0; não altera versão nem reinicia deliberadamente a auditoria)
+- relatorios.py   ADICIONAR (NOVO)
+- requirements.txt SUBSTITUIR/ATUALIZAR
+
+Aguardar o Streamlit Cloud atualizar o aplicativo após o commit.
+Recarregar o lote de PDFs e a Base Geral somente se a sessão os tiver perdido.
+NÃO publicar os PDFs, CSV da Base Geral ou relatórios com dados pessoais no GitHub público.
+
+EXPORTAÇÃO:
+- Botão "Baixar relatório completo (.xlsx)" abaixo das abas.
+- Uma aba por tipo de ocorrência: INCLUSÃO, RETIFICAÇÃO, REPUBLICAÇÃO, ANULAÇÃO.
+- RESUMO, COBERTURA DOE, OUTRAS OCORRÊNCIAS, PENDÊNCIAS,
+  DIVERGÊNCIAS APARENTES, AUDITORIA MANUAL, CORREÇÕES CONFERIDAS.
+- Preserva matrícula e código como texto, filtros e cabeçalhos.
+- Não altera a Base Geral; não homologa automaticamente resultados.
+
+ATENÇÃO:
+- A aba CORREÇÕES CONFERIDAS reúne somente decisões humanas marcadas
+  "CORREÇÃO NECESSÁRIA" e registradas no painel; não são homologações oficiais.
+- O histórico de decisões continua exigindo download do CSV e restauração
+  em sessões posteriores. O .xlsx é relatório, não restaura automaticamente decisões.
+- O motor mantém prioridade para Atos de Pessoal do Poder Executivo, mas
+  percorre todas as páginas. Ano/código indeterminado continua pendente.
+- Não é possível comprovar a integridade de cada PDF apenas com o painel.

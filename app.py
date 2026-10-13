@@ -11,6 +11,7 @@ import unicodedata
 import pandas as pd
 import streamlit as st
 import engine
+from relatorios import excel_bytes
 
 st.set_page_config(page_title="Auditoria SIDA / ELÚCIDA", page_icon="🐜", layout="wide")
 st.markdown("""<style>
@@ -19,7 +20,7 @@ st.markdown("""<style>
 [data-testid="stMetricLabel"]{font-size:.95rem}
 </style>""", unsafe_allow_html=True)
 st.title("🐜 Auditoria SIDA / ELÚCIDA")
-st.caption("Painel de acompanhamento documental • Engine 7.0 • localização ≠ validação ≠ conclusão")
+st.caption("Painel de acompanhamento documental • Engine 7.0 • relatório Excel por ocorrência • localização ≠ validação ≠ conclusão")
 st.warning("Os resultados são CANDIDATOS, não correções confirmadas. Não altere a Base Geral com base nesta triagem. O Streamlit Cloud não garante armazenamento persistente e este protótipo não é repositório oficial de dados pessoais.")
 
 # Manter os dados enviados apenas na sessão/instância do aplicativo.
@@ -294,6 +295,19 @@ with tab_audit:
             st.download_button("⬇️ Baixar correções registradas (CSV)",audit_csv(approved),
                                "correcoes_registradas_sida.csv","text/csv",key="download_audit_corrections")
         st.caption("O CSV de correções é um registro de decisões humanas, não uma alteração automática da Base Geral.")
+
+# Exportação integral em Excel com uma aba para cada situação de ocorrência.
+# Dados desta instância; não inclui PDFs ou informações de outros lotes.
+st.divider()
+st.subheader("📥 Relatório completo — Excel por tipo de ocorrência")
+st.caption("Abas: Resumo, Cobertura, Inclusão, Retificação, Republicação, Anulação, Outras ocorrências, Pendências, Divergências aparentes, Auditoria manual e Correções conferidas. Resultados automáticos não são homologados.")
+try:
+    # A tabela de diferenças é reconstruída somente quando a associação ano/valor existe.
+    export_diffs = differences[display_cols].copy() if "differences" in globals() and "display_cols" in globals() and not differences.empty else pd.DataFrame(columns=["DOE","Arquivo","Página","Tipo","Matrícula","Servidor","Ano","Nota na base","Valor extraído do DOE","Diferença aparente","Trecho","Situação"])
+    export_data = excel_bytes(docs,hits,export_diffs,st.session_state.sida_audit_records,meta[0] if meta else "")
+    st.download_button("⬇️ Baixar relatório completo (.xlsx)",data=export_data,file_name="Relatorio_Robo_Formiga_SIDA.xlsx",mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",key="sida_xlsx_full")
+except Exception as exc:
+    st.error(f"Falha ao gerar o Excel: {type(exc).__name__}: {exc}")
 
 with tab_about:
     st.markdown("""**Regras do painel**
