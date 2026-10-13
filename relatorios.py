@@ -1,106 +1,105 @@
-"""Exportação Excel do Robô Formiga. Somente resultados documentais da sessão."""
+"""Relatório de seis abas; não presume vigência, omissão ou revogação."""
 from io import BytesIO
-from datetime import datetime
 import pandas as pd
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
-from openpyxl.worksheet.table import Table, TableStyleInfo
 
-CATEGORIES = {"INCLUSAO":"INCLUSÃO", "RETIFICACAO":"RETIFICAÇÃO", "REPUBLICACAO":"REPUBLICAÇÃO", "ANULACAO":"ANULAÇÃO", "TORNAR_SEM_EFEITO":"TORNAR SEM EFEITO", "REVOGACAO":"REVOGAÇÃO"}
-AUDIT_FIELDS = ["chave","status","DOE","Arquivo","Página","Tipo","Matrícula","Servidor","Ano","Nota na base","Valor extraído do DOE","Nota validada","Código validado","DOE da evidência","Página da evidência","Ato/Edital","Evidência e histórico posterior","Responsável","Data UTC"]
+NAMES=['CONSOLIDADO','INCLUSÕES','RETIFICAÇÕES','ONDE CONSTA E PASSE A CONSTAR','TORNAR SEM EFEITO','HISTÓRICO POR MATRÍCULA']
 
-def excel_bytes(docs, hits, differences=None, decisions=None, version="", timeline=None, per_matricula=None, controlled=None):
-    """Abas separadas; sem homologação implícita, sem alteração da Base Geral."""
-    decisions = decisions or {}
-    differences = differences if differences is not None else pd.DataFrame()
-    hits = hits.copy()
+def excel_bytes(docs,hits,differences=None,decisions=None,version='',timeline=None,per_matricula=None,controlled=None,medias=None):
+    hits=hits if hits is not None else pd.DataFrame()
+    timeline=timeline if timeline is not None else pd.DataFrame()
+    per_matricula=per_matricula if per_matricula is not None else pd.DataFrame()
+    controlled=controlled if controlled is not None else pd.DataFrame()
+    medias=medias if medias is not None else pd.DataFrame()
+    differences=differences if differences is not None else pd.DataFrame()
+    sheets={}
+    # Consolidado não junta notas alternativas em uma mesma célula: cada evidência tem sua linha.
+    records=[]
+    if not timeline.empty:
+        for _,r in timeline.iterrows():
+            records.append({'Matrícula':r.get('Matrícula',''),'Servidor':r.get('Servidor',''),
+                'Exercício':r.get('Exercício',''),'Nota Base Geral':r.get('Nota na Base Geral',''),
+                'Nota publicada':r.get('Nota publicada (extração)',''),
+                'Código publicado':r.get('Código publicado (extração)',''),
+                'Tipo / natureza':r.get('Tipo de ocorrência',''),
+                'Situação':r.get('Estado documental',''), 'DOE':r.get('DOE',''),
+                'Página':r.get('Página',''),'ID evento':r.get('ID do evento','')})
+    # Desagregar múltiplos valores extraídos de uma mesma ocorrência.
+    expanded=[]
+    for rec in records:
+        notes=str(rec['Nota publicada']).split(' | ') if rec['Nota publicada'] else ['']
+        codes=str(rec['Código publicado']).split(' | ') if rec['Código publicado'] else ['']
+        for note in notes:
+            for code in codes:
+                row=rec.copy();row['Nota publicada']=note;row['Código publicado']=code
+                expanded.append(row)
+    sheets['CONSOLIDADO']=pd.DataFrame(expanded,columns=['Matrícula','Servidor','Exercício','Nota Base Geral','Nota publicada','Código publicado','Tipo / natureza','Situação','DOE','Página','ID evento'])
+    # Inclusão exige prova da omissão anterior: triagem genérica não satisfaz esse critério.
+    sheets['INCLUSÕES']=pd.DataFrame(columns=['Matrícula','Servidor','Exercício','Nota incluída','Código','DOE anterior','Edital anterior','Prova de omissão','DOE inclusão','Página','Situação'])
+    ret=[]
+    if not controlled.empty:
+        for _,r in controlled.iterrows():
+            ret.append({'Matrícula':r.get('matricula',''),'Servidor':r.get('nome_depois',''),
+                'Exercício':r.get('exercicio',''),'Nota Base Geral':'',
+                'Nota anterior no DOE':r.get('nota_antes',''),'Nota retificada no DOE':r.get('nota_depois',''),
+                'Campo alterado':r.get('campo_alterado',''),'DOE':r.get('doe',''),
+                'Edital':r.get('edital',''),'Página':r.get('pagina_impressa',''),
+                'Situação':'ALTERAÇÃO IDENTIFICADA; COMPARAR BASE E POSTERIORES'})
+    # Valor da Base Geral é obtido somente quando há correspondência inequívoca de matrícula/exercício.
     if not hits.empty:
-        hits = hits.drop(columns=["_doc"], errors="ignore")
-    coverage = docs.rename(columns={"numero":"DOE","name":"Arquivo","tipo":"Tipo","pages":"Páginas","done_pages":"Páginas lidas","status":"Situação","error":"Erro"}).drop(columns=["id"],errors="ignore")
-    audited = pd.DataFrame(list(decisions.values()), columns=AUDIT_FIELDS)
-    corrections = audited[audited["status"] == "CORREÇÃO NECESSÁRIA"].copy() if not audited.empty else audited.copy()
-    pending = hits[(hits["Situação"].astype(str).str.contains("PENDENTE|CANDIDATO|INDETERMINADO",case=False,na=False)) | (hits["Ano"].astype(str)=="INDETERMINADO")].copy() if not hits.empty else hits.copy()
-    summary = pd.DataFrame([
-        ["Versão do motor", version], ["Gerado em", datetime.now().strftime("%d/%m/%Y %H:%M")],
-        ["Documentos registrados",len(docs)], ["Documentos com extração concluída",int((docs["status"]=="EXTRACAO CONCLUIDA - REVISAR").sum()) if not docs.empty else 0],
-        ["Candidatos à revisão",len(hits)], ["Exercício indeterminado",int((hits["Ano"].astype(str)=="INDETERMINADO").sum()) if not hits.empty else 0],
-        ["Diferenças aparentes (não homologadas)",len(differences)],
-        ["Decisões manuais registradas",len(audited)], ["Correções indicadas pelo operador",len(corrections)],
-        ["Importante","Extração não equivale a validação; conferir ato, cabeçalho, matrícula, exercício, códigos e publicações posteriores."],
-        ["Escopo","Somente PDFs do lote carregado nesta execução; não consultar DOE externo automaticamente."],
-    ],columns=["Indicador","Valor"])
-    sheets = {"RESUMO":summary, "COBERTURA DOE":coverage}
-    if controlled is not None:
-        ret = controlled.copy().rename(columns={
-            "matricula":"Matrícula", "nome_antes":"Nome anterior",
-            "nome_depois":"Servidor", "exercicio":"Exercício",
-            "nota_antes":"Onde consta — nota", "nota_depois":"Passe a constar — nota",
-            "alterou_nota":"Alterou nota?", "campo_alterado":"Campo alterado",
-            "doe":"DOE", "edital":"Edital", "pagina_pdf":"Página do PDF",
-            "pagina_impressa":"Páginas do DOE", "situacao":"Situação",
-            "evidencia":"Evidência", "arquivo":"Arquivo", "data_publicacao":"Data publicação"})
-        sheets["RETIFICAÇÕES IDENTIFICADAS"] = ret.drop(columns=["doc"],errors="ignore")
-    if per_matricula is not None:
-        sheets["CONSOLIDADO MATRÍCULA"] = per_matricula
-    if timeline is not None:
-        sheets["HISTÓRICO DOCUMENTAL"] = timeline
-        sheets["EXERCÍCIO INDETERMINADO"] = timeline[timeline["Exercício"].astype(str)=="INDETERMINADO"].copy()
-        pares=timeline[(timeline["Onde consta (texto do ato)"].astype(str).str.len()>0) & (timeline["Passe a constar (texto do ato)"].astype(str).str.len()>0)].copy()
-        sheets["PARES TEXTUAIS A CONFERIR"] = pares
-        # Pares são apenas pistas textuais; o contexto pode abranger linhas de outros servidores.
-
-    for code,label in CATEGORIES.items():
-        sheets[label] = hits[hits["Tipo"].astype(str).str.upper()==code].copy() if not hits.empty else hits.copy()
-    sheets["OUTRAS OCORRÊNCIAS"] = hits[~hits["Tipo"].astype(str).str.upper().isin(CATEGORIES)].copy() if not hits.empty else hits.copy()
-    sheets["PENDÊNCIAS"] = pending
-    sheets["DIVERGÊNCIAS APARENTES"] = differences.drop(columns=["_doc","doc","page","matricula","exercicio","_base_num","_pub_num","chave"],errors="ignore")
-    sheets["AUDITORIA MANUAL"] = audited
-    if timeline is not None and not timeline.empty:
-        # Fila de trabalho explícita: evidências pendentes não são homologações.
-        work = timeline[[c for c in ["ID do evento","Matrícula","Servidor","Exercício","DOE","Página",
-          "Tipo de ocorrência","Campo afetado","Onde consta (texto do ato)",
-          "Passe a constar (texto do ato)","Eventos posteriores possíveis",
-          "Relação posterior","Pesquisa posterior no lote","Alerta de interpretação"] if c in timeline.columns]].copy()
-        work["Verificação do operador"] = "PENDENTE"
-        work["DOE de comprovação"] = ""
-        work["Página de comprovação"] = ""
-        work["Conclusão fundamentada"] = ""
-        sheets["FILA CONFERÊNCIA"] = work
-        sheets["ATOS POSTERIORES POSSÍVEIS"] = timeline[timeline["Eventos posteriores possíveis"].astype(str).str.len()>0].copy()
-        sheets["ALERTAS INTERPRETAÇÃO"] = timeline[timeline["Alerta de interpretação"].astype(str).str.len()>0].copy()
-    sheets["CORREÇÕES CONFERIDAS"] = corrections
+        for r in ret:
+            matches=hits[(hits['Matrícula'].astype(str)==str(r['Matrícula'])) & (hits['Ano'].astype(str)==str(r['Exercício']))]
+            vals=list(dict.fromkeys(str(v).strip() for v in matches['Nota na base'] if str(v).strip()))
+            if len(vals)==1:r['Nota Base Geral']=vals[0]
+    sheets['RETIFICAÇÕES']=pd.DataFrame(ret,columns=['Matrícula','Servidor','Exercício','Nota Base Geral','Nota anterior no DOE','Nota retificada no DOE','Campo alterado','DOE','Edital','Página','Situação'])
+    media_rows=[]
+    for _,r in medias.iterrows():
+        media_rows.append({'Matrícula':r.get('matricula',''),'Servidor':r.get('servidor',''),
+            'Triênio':r.get('trienio',''),'Nota '+str(r.get('ano1',''))+' anterior':r.get('antes1',''),
+            'Nota '+str(r.get('ano2',''))+' anterior':r.get('antes2',''),
+            'Nota '+str(r.get('ano3',''))+' anterior':r.get('antes3',''),
+            'Média anterior':r.get('media_antes',''),
+            'Nota '+str(r.get('ano1',''))+' corrigida':r.get('depois1',''),
+            'Nota '+str(r.get('ano2',''))+' corrigida':r.get('depois2',''),
+            'Nota '+str(r.get('ano3',''))+' corrigida':r.get('depois3',''),
+            'Média corrigida':r.get('media_depois',''),
+            'Campos alterados':r.get('campos_alterados',''),'DOE':r.get('doe',''),
+            'Edital':r.get('edital',''),'Publicação de origem':r.get('origem',''),
+            'Páginas DOE':r.get('pagina_doe',''),'Situação':r.get('situacao','')})
+    sheets['ONDE CONSTA E PASSE A CONSTAR']=pd.DataFrame(media_rows)
+    # Sem prova do alcance, atos classificados não podem ser descritos como efetivados.
+    t=timeline[timeline['Tipo de ocorrência'].astype(str).str.contains('TORNAR_SEM_EFEITO',na=False)] if not timeline.empty else pd.DataFrame()
+    sheets['TORNAR SEM EFEITO']=t.drop(columns=['Contexto do ato'],errors='ignore').copy()
+    hist=timeline.copy()
+    if not medias.empty:
+        extras=[]
+        for _,r in medias.iterrows():
+            extras.append({'Matrícula':r['matricula'],'Servidor':r['servidor'],'Exercício':r['trienio'],
+                'DOE':r['doe'],'Arquivo':r['arquivo'],'Página':r['pagina_doe'],
+                'Tipo de ocorrência':'RETIFICAÇÃO DE MÉDIA DO TRIÊNIO',
+                'Natureza do valor':'MÉDIA DE PERÍODO — NÃO TRATAR COMO NOTA ANUAL',
+                'Campo afetado':r['campos_alterados'],
+                'Onde consta (texto do ato)':f"{r['antes1']}; {r['antes2']}; {r['antes3']}; MÉDIA {r['media_antes']}",
+                'Passe a constar (texto do ato)':f"{r['depois1']}; {r['depois2']}; {r['depois3']}; MÉDIA {r['media_depois']}",
+                'Estado documental':r['situacao'],'Edital relacionado':r['edital']})
+        hist=pd.concat([hist,pd.DataFrame(extras)],ignore_index=True)
+    sheets['HISTÓRICO POR MATRÍCULA']=hist.drop(columns=['Contexto do ato'],errors='ignore')
     buf=BytesIO()
-    with pd.ExcelWriter(buf,engine="openpyxl") as writer:
-        for sheet_name,frame in sheets.items():
-            frame = frame.copy().fillna("")
-            # Matrículas e códigos são identificadores textuais; não converter em números.
-            for col in ("Matrícula","Código Cxxx","Código validado", "Código publicado (extração)"):
-                if col in frame.columns: frame[col]=frame[col].astype(str)
-            frame.to_excel(writer,sheet_name=sheet_name,index=False)
-            ws=writer.sheets[sheet_name]
-            ws.freeze_panes="A2"
-            ws.sheet_view.showGridLines=False
-            ws.row_dimensions[1].height=27
-            for cell in ws[1]:
-                cell.fill=PatternFill("solid",fgColor="183153")
-                cell.font=Font(name="Calibri",bold=True,color="FFFFFF",size=11)
-                cell.alignment=Alignment(vertical="center")
-            for idx,col in enumerate(frame.columns,1):
-                if col in ("Trecho","Trecho da publicação","Contexto do ato","Evidência e histórico posterior","fonte_contexto"):
-                    width=65
-                elif col in ("Servidor","Arquivo","Ato/Edital"):
-                    width=37
-                elif col in ("Matrícula","Nota na base","Valor extraído do DOE","Nota validada","Código validado"):
-                    width=20
-                else:
-                    width=max(14,min(30,len(str(col))+4))
-                ws.column_dimensions[get_column_letter(idx)].width=width
-                if col in ("Matrícula","Código validado","Código Cxxx", "Código publicado (extração)"):
-                    for row in ws.iter_rows(min_row=2,min_col=idx,max_col=idx):
-                        row[0].number_format="@"
-            if ws.max_row>1:
-                ws.auto_filter.ref=ws.dimensions
-                for row in ws.iter_rows(min_row=2):
-                    for cell in row:
-                        if cell.row%2==0: cell.fill=PatternFill("solid",fgColor="F1F6FA")
+    with pd.ExcelWriter(buf,engine='openpyxl') as writer:
+        for name in NAMES:
+            frame=sheets[name].copy().fillna('')
+            if frame.empty and len(frame.columns)==0:frame=pd.DataFrame(columns=['Sem registros comprovados'])
+            for col in frame.columns:
+                if 'Matrícula' in str(col) or str(col)=='DOE':frame[col]=frame[col].astype(str)
+            frame.to_excel(writer,sheet_name=name,index=False)
+            ws=writer.sheets[name];ws.freeze_panes='A2';ws.sheet_view.showGridLines=False
+            for c in ws[1]:
+                c.fill=PatternFill('solid',fgColor='17324D');c.font=Font(bold=True,color='FFFFFF');c.alignment=Alignment(wrap_text=True)
+            ws.row_dimensions[1].height=32
+            for i,col in enumerate(frame.columns,1):
+                ws.column_dimensions[get_column_letter(i)].width=min(43,max(17,len(str(col))+3))
+                if 'Matrícula' in str(col) or str(col)=='DOE':
+                    for row in ws.iter_rows(min_row=2,min_col=i,max_col=i):row[0].number_format='@'
+            if ws.max_row>1:ws.auto_filter.ref=ws.dimensions
     return buf.getvalue()

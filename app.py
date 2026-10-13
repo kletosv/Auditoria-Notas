@@ -21,7 +21,7 @@ st.markdown("""<style>
 [data-testid="stMetricLabel"]{font-size:.95rem}
 </style>""", unsafe_allow_html=True)
 st.title("🐜 Auditoria SIDA / ELÚCIDA")
-st.caption("Painel de acompanhamento documental • Engine 8.2 • Histórico v15 • relatório Excel por ocorrência • localização ≠ validação ≠ conclusão")
+st.caption("Painel de acompanhamento documental • Engine 8.2 • Histórico v16 • seis abas documentais • localização ≠ validação ≠ conclusão")
 st.warning("Os resultados são CANDIDATOS, não correções confirmadas. Não altere a Base Geral com base nesta triagem. O Streamlit Cloud não garante armazenamento persistente e este protótipo não é repositório oficial de dados pessoais.")
 
 # Manter os dados enviados apenas na sessão/instância do aplicativo.
@@ -77,6 +77,7 @@ try:
         ORDER BY d.numero,h.page,h.matricula,h.exercicio""",con)
     detail=pd.read_sql_query("SELECT doc,page,matricula,exercicio,nota_publicada,codigo,fonte_contexto FROM audit_details",con)
     controlled=pd.read_sql_query("SELECT * FROM retificacoes_controladas ORDER BY doe,matricula",con)
+    medias=pd.read_sql_query("SELECT * FROM medias_controladas ORDER BY doe,matricula",con)
     meta=con.execute("SELECT value FROM meta WHERE key='engine_version'").fetchone()
     con.close()
 except Exception as exc:
@@ -319,12 +320,12 @@ with tab_audit:
 # Exportação integral em Excel com uma aba para cada situação de ocorrência.
 # Dados desta instância; não inclui PDFs ou informações de outros lotes.
 st.divider()
-st.subheader("📥 Relatório completo — Excel por tipo de ocorrência")
-st.caption("Inclui CONSOLIDADO MATRÍCULA (uma linha por matrícula/exercício 2019–2024), HISTÓRICO DOCUMENTAL, ATOS POSTERIORES POSSÍVEIS, FILA CONFERÊNCIA e ALERTAS INTERPRETAÇÃO. Vínculos cronológicos são candidatos, não prova de revogação ou vigência.")
+st.subheader("📥 Relatório SIDA — seis abas homologadas")
+st.caption("Seis abas: Consolidado, Inclusões, Retificações, Onde Consta e Passe a Constar, Tornar Sem Efeito e Histórico por Matrícula. Inclusões sem comprovação permanecem vazias; não homologar vigência.")
 try:
     # A tabela de diferenças é reconstruída somente quando a associação ano/valor existe.
     export_diffs = differences[display_cols].copy() if "differences" in globals() and "display_cols" in globals() and not differences.empty else pd.DataFrame(columns=["DOE","Arquivo","Página","Tipo","Matrícula","Servidor","Ano","Nota na base","Valor extraído do DOE","Diferença aparente","Trecho","Situação"])
-    export_data = excel_bytes(docs,hits,export_diffs,st.session_state.sida_audit_records,meta[0] if meta else "",timeline=timeline,per_matricula=per_matricula,controlled=controlled)
+    export_data = excel_bytes(docs,hits,export_diffs,st.session_state.sida_audit_records,meta[0] if meta else "",timeline=timeline,per_matricula=per_matricula,controlled=controlled,medias=medias)
     st.download_button("⬇️ Baixar relatório completo (.xlsx)",data=export_data,file_name="Relatorio_Robo_Formiga_SIDA.xlsx",mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",key="sida_xlsx_full")
 except Exception as exc:
     st.error(f"Falha ao gerar o Excel: {type(exc).__name__}: {exc}")
