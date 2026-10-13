@@ -1,4 +1,4 @@
-"""SIDA/ELÚCIDA — motor 6.0 (triagem documental, não homologação).
+"""SIDA/ELÚCIDA — motor 7.0 (triagem documental, não homologação).
 
 Compatível com app.py existente: connect(), run_folder(folder, base_csv).
 Somente PDFs fornecidos pelo usuário. Não altera a Base Geral.
@@ -14,7 +14,7 @@ from pathlib import Path
 import fitz
 
 DB = "auditoria.sqlite3"
-ENGINE_VERSION = "6.0-colunas-por-coordenadas-20261009"
+ENGINE_VERSION = "7.0-prioridade-atos-pessoal-historico-20261013"
 YEARS = tuple(str(x) for x in range(2019, 2026))
 MAT = re.compile(r"(?<!\d)\d{7,11}(?!\d)")
 ACT = re.compile(r"^\s*(?:EDITAL|RESOLUCAO|PORTARIA|DECRETO|EXTRATO|AVISO|DESPACHO|ATO|REPUBLICACAO|RETIFICACAO)\b")
@@ -28,6 +28,7 @@ KIND = {
 BAD = re.compile(r"\b(?:LICITACAO|PREGAO|CONTRATO|ORCAMENTARI[AO]|EMPENHO|NOTA\s+FISCAL|EXTRATO\s+DE\s+CONTRATO)\b")
 YEAR_LABEL = re.compile(r"\b(?:EXERCICIO|ANO\s+(?:DA\s+)?AVALIACAO|ADI\s+(?:DE\s+)?|PGDI\s+(?:DE\s+)?|AVALIACAO\s+DE\s+DESEMPENHO\s+(?:DE\s+)?)[\s:–-]*(20(?:19|20|21|22|23|24|25))\b")
 SCORE = re.compile(r"(?<![\w,.])(?:100(?:[,.]00)?|(?:[0-9]|[1-9][0-9])[,\.][0-9]{1,2}|C[0-9]{3})(?!\w)")
+PRIORITY_SECTION = re.compile(r"ATOS\s+DE\s+PESSOAL\s+DO\s+PODER\s+EXECUTIVO", re.I)
 DOC_NUM = re.compile(r"(?<!\d)(1[012][._\s]?\d{3})(?!\d)")
 
 
@@ -48,6 +49,9 @@ def connect():
       situacao TEXT DEFAULT 'CANDIDATO - REVISAR',
       UNIQUE(doc,page,tipo,matricula,exercicio,trecho))""")
     con.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")
+    con.execute("""CREATE TABLE IF NOT EXISTS processed_pages (
+      doc TEXT NOT NULL, page INTEGER NOT NULL, priority INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY(doc,page))""")
     con.execute("""CREATE TABLE IF NOT EXISTS audit_details (
       doc TEXT, page INTEGER, matricula TEXT, exercicio TEXT,
       classificacao TEXT, codigo TEXT, nota_publicada TEXT,
@@ -61,6 +65,7 @@ def connect():
         if version is not None:
             con.execute("INSERT INTO history_docs SELECT *, ? FROM docs", (version[0],))
             con.execute("INSERT INTO history_hits SELECT *, ? FROM hits", (version[0],))
+        con.execute("DELETE FROM processed_pages")
         con.execute("DELETE FROM audit_details")
         con.execute("DELETE FROM hits")
         con.execute("DELETE FROM docs")
@@ -267,11 +272,22 @@ def scan_one(path, base):
             total = len(pdf)
             con.execute("UPDATE docs SET pages=?,status='EM ANALISE',error='' WHERE id=?", (total, digest))
             con.commit()
-            start = min(previous[1], total) if previous else 0
-            for i in range(start, total):
+            already={r[0] for r in con.execute("SELECT page FROM processed_pages WHERE doc=?",(digest,))}
+            priority=[]
+            other=[]
+            for i in range(total):
+                if i+1 in already:
+                    continue
+                text=normalize(pdf[i].get_text("text"))
+                # A seção pode estar em qualquer parte do PDF. Esta etapa NÃO exclui páginas.
+                # A detecção é heurística e pode incluir o sumário: não constitui prova do ato.
+                if PRIORITY_SECTION.search(text) and (ADI.search(text) or KIND["RETIFICACAO"].search(text)):
+                    priority.append(i)
+                else:
+                    other.append(i)
+            for i in priority+other:
                 page = pdf[i]
                 if not page.get_text("text").strip():
-                    # PDF imagem: marcar incompleto em vez de afirmar leitura total.
                     con.execute("UPDATE docs SET status='PESQUISA INCOMPLETA',error=? WHERE id=?",
                                 (f"Página {i+1} sem texto extraível (possível digitalização)", digest))
                     con.commit()
@@ -288,7 +304,10 @@ def scan_one(path, base):
                       (digest, i + 1, item["matricula"], item["ano"], item["tipo"],
                        item["codigo"], item["nota"], item["contexto"],
                        "Triagem automática; verificar cabeçalho, linha, código e versões anteriores/posteriores"))
-                con.execute("UPDATE docs SET done_pages=? WHERE id=?", (i + 1, digest))
+                con.execute("INSERT OR IGNORE INTO processed_pages(doc,page,priority) VALUES (?,?,?)",
+                            (digest,i+1,int(i in priority)))
+                done=con.execute("SELECT COUNT(*) FROM processed_pages WHERE doc=?",(digest,)).fetchone()[0]
+                con.execute("UPDATE docs SET done_pages=? WHERE id=?", (done, digest))
                 con.commit()
             con.execute("UPDATE docs SET status='EXTRACAO CONCLUIDA - REVISAR' WHERE id=?", (digest,))
             con.commit()
@@ -310,6 +329,7 @@ def run_folder(folder, base_csv):
     old = con.execute("SELECT value FROM meta WHERE key='base_hash'").fetchone()
     if old and old[0] != base_hash:
         # Candidatos calculados contra outra base não podem ser reaproveitados.
+        con.execute("DELETE FROM processed_pages")
         con.execute("DELETE FROM audit_details")
         con.execute("DELETE FROM hits")
         con.execute("DELETE FROM docs")

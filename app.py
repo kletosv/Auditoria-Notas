@@ -1,4 +1,4 @@
-"""Dashboard SIDA/ELÚCIDA — apresentação e triagem; Engine 6.0 permanece intacta."""
+"""Dashboard SIDA/ELÚCIDA — apresentação e triagem; Engine 7.0 permanece intacta."""
 from pathlib import Path
 import hashlib
 import io
@@ -19,7 +19,7 @@ st.markdown("""<style>
 [data-testid="stMetricLabel"]{font-size:.95rem}
 </style>""", unsafe_allow_html=True)
 st.title("🐜 Auditoria SIDA / ELÚCIDA")
-st.caption("Painel de acompanhamento documental • Engine 6.0 • localização ≠ validação ≠ conclusão")
+st.caption("Painel de acompanhamento documental • Engine 7.0 • localização ≠ validação ≠ conclusão")
 st.warning("Os resultados são CANDIDATOS, não correções confirmadas. Não altere a Base Geral com base nesta triagem. O Streamlit Cloud não garante armazenamento persistente e este protótipo não é repositório oficial de dados pessoais.")
 
 # Manter os dados enviados apenas na sessão/instância do aplicativo.
@@ -233,6 +233,29 @@ with tab_audit:
             existing=records.get(key,{})
             st.caption(f"Fonte inicial: {r['Arquivo']} — página {r['Página']} — tipo indicado: {r['Tipo']}")
             st.code(str(r.get("Trecho","")),language=None)
+            st.markdown("#### Notas por exercício — associação preliminar")
+            st.caption("Os anos e valores são extraídos automaticamente. Confira os cabeçalhos originais antes de decidir. Média do triênio não é nota anual; códigos Cxxx não são convertidos.")
+            # Exibe todos os anos localizados na MESMA publicação, página e matrícula.
+            same=joined_audit[
+                (joined_audit["_doc"].astype(str)==str(r["_doc"])) &
+                (joined_audit["Página"].astype(str)==str(r["Página"])) &
+                (joined_audit["Matrícula"].astype(str)==str(r["Matrícula"]))
+            ].copy()
+            if not same.empty:
+                same=same.rename(columns={"nota_publicada":"Valor extraído do DOE","codigo":"Código Cxxx"})
+                same=same.drop_duplicates(subset=["Ano","Valor extraído do DOE","Código Cxxx","Trecho"])
+                same=same.sort_values("Ano")
+                cols=["Ano","Valor extraído do DOE","Código Cxxx","Nota na base","Situação"]
+                st.dataframe(same[cols].fillna(""),hide_index=True,use_container_width=True)
+            st.markdown("#### Histórico localizado da matrícula no lote")
+            history=joined_audit[joined_audit["Matrícula"].astype(str)==str(r["Matrícula"])].copy()
+            history=history.sort_values(["DOE","Página","Ano"])
+            hist_cols=["DOE","Arquivo","Página","Tipo","Ano","Nota na base","nota_publicada","codigo","Situação"]
+            history=history.rename(columns={"nota_publicada":"Valor extraído do DOE","codigo":"Código Cxxx"})
+            hist_cols=["Valor extraído do DOE" if x=="nota_publicada" else "Código Cxxx" if x=="codigo" else x for x in hist_cols]
+            history=history.drop_duplicates(subset=["Arquivo","Página","Tipo","Ano","Valor extraído do DOE","Código Cxxx"])
+            st.dataframe(history[hist_cols].fillna(""),hide_index=True,use_container_width=True,height=min(320,85+35*len(history)))
+            st.caption("Histórico restrito aos PDFs deste lote. A ordem de publicação não determina, por si só, qual nota prevalece.")
             with st.form("sida_audit_form"):
                 current_status=existing.get("status","PENDENTE")
                 status=st.selectbox("Resultado da conferência",STATUS_OPTIONS,index=STATUS_OPTIONS.index(current_status) if current_status in STATUS_OPTIONS else 0)
