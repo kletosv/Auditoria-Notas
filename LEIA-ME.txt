@@ -1,19 +1,43 @@
-ROBÔ FORMIGA — ETAPA 15: PROVA DOCUMENTAL CONTROLADA
+ROBÔ FORMIGA — ATUALIZAÇÃO 15 | INTEGRAÇÃO CONTROLADA
 
-Este pacote NÃO é uma atualização de produção do Streamlit. NÃO substitua app.py, engine.py, historico.py ou relatorios.py.
+Objetivo: integrar ao aplicativo a leitura tabular testada no Edital 44/2024,
+DOE 11.575, exercício 2022, sem homologar automaticamente notas vigentes.
 
-Foi testado o DOE 11.575 de 05/08/2024, Edital 44/2024, páginas 16-17, retificação das notas de 2022.
-O extrator conseguiu parear 9 matrículas entre as tabelas 'Onde consta' e 'Passe a constar'.
-O CSV e Excel registram as notas anteriores e posteriores publicadas naquele ato.
+ARQUIVOS PARA COLOCAR NA RAIZ DO GITHUB:
+- app.py (substituir)
+- engine.py (substituir)
+- historico.py (substituir)
+- relatorios.py (substituir)
+- retificacoes_controladas.py (NOVO, adicionar)
 
-LIMITAÇÕES:
-- Não foram investigadas publicações posteriores nem vigência final.
-- Os nomes vêm de extração de texto e podem apresentar quebra/truncamento; conferir visualmente.
-- O extrator é específico para a estrutura do Edital 44/2024; não foi homologado para outros atos.
-- A nota de 98934021 permanece 100,00 em ambas as tabelas: não concluir alteração de nota.
+Não substituir requirements.txt. Dependências usadas: fitz/PyMuPDF,
+pandas, streamlit, openpyxl, já presentes no projeto anterior.
 
-COMO REPRODUZIR:
-python teste_controlado.py "caminho/para/15 DO 11.575 Retificação ADM e PROf _05_08_2024.pdf"
-Requer PyMuPDF (fitz). Gera CSV. O Excel já acompanha o pacote.
+PASSOS:
+1. Salvar o relatório atual e exportar as decisões manuais da sessão.
+2. Fazer backup dos quatro arquivos Python atuais.
+3. Substituir os quatro arquivos e adicionar retificacoes_controladas.py
+   na mesma pasta do app.py, no GitHub.
+4. Reiniciar o Streamlit Cloud, se necessário.
+5. Carregar novamente Base Geral CSV e os PDFs, incluindo DOE 11.575.
+6. Executar a extração. A versão do motor mudou e a extração anterior
+   será arquivada/limpa para evitar mistura de esquemas.
+7. Gerar o Excel. Conferir RETIFICAÇÕES IDENTIFICADAS, HISTÓRICO DOCUMENTAL
+   e CONSOLIDADO MATRÍCULA.
 
-PRÓXIMO PASSO: validar visualmente os nove registros e testar a associação de publicações posteriores antes de integrar no motor de produção.
+ESCOPO / LIMITES:
+- Parser validado somente para as duas tabelas do Edital 44/2024.
+- Retorna 9 matrículas no PDF de teste enviado.
+- Não extrapola o algoritmo para outros editais com estruturas diferentes.
+- Não pesquisa atos posteriores fora dos PDFs fornecidos.
+- Onde consta/Passe a constar comprovam a alteração no edital, mas NÃO
+  comprovam vigência atual ou ausência de retificação posterior.
+- Base Geral não é modificada.
+- Página do PDF refere-se ao recorte enviado; páginas impressas 16–17.
+- PDFs e Base Geral não devem ser enviados ao repositório público.
+
+TESTE LOCAL:
+- PDF: 15 DO 11.575 Retificação ADM e PROf _05_08_2024.pdf
+- 9 pares extraídos; planilha de teste anexa separadamente.
+- Teste de extração + geração Excel realizado em ambiente local.
+- Execução no Streamlit Cloud ainda não validada.

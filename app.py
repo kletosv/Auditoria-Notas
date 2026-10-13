@@ -21,7 +21,7 @@ st.markdown("""<style>
 [data-testid="stMetricLabel"]{font-size:.95rem}
 </style>""", unsafe_allow_html=True)
 st.title("🐜 Auditoria SIDA / ELÚCIDA")
-st.caption("Painel de acompanhamento documental • Engine 8.0 • Histórico v13 • relatório Excel por ocorrência • localização ≠ validação ≠ conclusão")
+st.caption("Painel de acompanhamento documental • Engine 8.2 • Histórico v15 • relatório Excel por ocorrência • localização ≠ validação ≠ conclusão")
 st.warning("Os resultados são CANDIDATOS, não correções confirmadas. Não altere a Base Geral com base nesta triagem. O Streamlit Cloud não garante armazenamento persistente e este protótipo não é repositório oficial de dados pessoais.")
 
 # Manter os dados enviados apenas na sessão/instância do aplicativo.
@@ -76,13 +76,14 @@ try:
         FROM hits h JOIN docs d ON d.id=h.doc
         ORDER BY d.numero,h.page,h.matricula,h.exercicio""",con)
     detail=pd.read_sql_query("SELECT doc,page,matricula,exercicio,nota_publicada,codigo,fonte_contexto FROM audit_details",con)
+    controlled=pd.read_sql_query("SELECT * FROM retificacoes_controladas ORDER BY doe,matricula",con)
     meta=con.execute("SELECT value FROM meta WHERE key='engine_version'").fetchone()
     con.close()
 except Exception as exc:
     st.error(f"Erro ao consultar o banco de dados: {exc}")
     st.stop()
 
-timeline, per_matricula = construir(hits, detail)
+timeline, per_matricula = construir(hits, detail, controlled)
 n_complete=int((docs.status=="EXTRACAO CONCLUIDA - REVISAR").sum()) if not docs.empty else 0
 n_incomplete=int((docs.status=="PESQUISA INCOMPLETA").sum()) if not docs.empty else 0
 n_undetermined=int((hits.Ano.astype(str)=="INDETERMINADO").sum()) if not hits.empty else 0
@@ -96,6 +97,9 @@ st.caption(f"Versão registrada: {meta[0] if meta else 'não informada'} • Pes
 tab_docs,tab_hits,tab_compare,tab_audit,tab_history,tab_about=st.tabs(["📚 Cobertura dos DOEs","🔎 Candidatos e filtros","⚖️ Comparação exploratória","🗂️ Auditoria de divergências","🕰️ Histórico por matrícula","ℹ️ Critérios e limites"])
 with tab_history:
     st.subheader("Histórico documental por matrícula — preliminar")
+    if not controlled.empty:
+        st.success(f"Retificações tabulares identificadas no Edital 44/2024: {len(controlled)} matrícula(s). Vigência ainda não confirmada.")
+        st.dataframe(controlled.rename(columns={"matricula":"Matrícula","nome_depois":"Servidor","nota_antes":"Onde consta","nota_depois":"Passe a constar","exercicio":"Exercício"}),hide_index=True,use_container_width=True)
     st.warning("A sequência de DOE é apenas cronológica. Não comprova vigência, revogação ou inexistência de atos posteriores. Campos não comprovados permanecem em branco.")
     if per_matricula.empty:
         st.info("Nenhuma ocorrência disponível nesta instância.")
@@ -320,7 +324,7 @@ st.caption("Inclui CONSOLIDADO MATRÍCULA (uma linha por matrícula/exercício 2
 try:
     # A tabela de diferenças é reconstruída somente quando a associação ano/valor existe.
     export_diffs = differences[display_cols].copy() if "differences" in globals() and "display_cols" in globals() and not differences.empty else pd.DataFrame(columns=["DOE","Arquivo","Página","Tipo","Matrícula","Servidor","Ano","Nota na base","Valor extraído do DOE","Diferença aparente","Trecho","Situação"])
-    export_data = excel_bytes(docs,hits,export_diffs,st.session_state.sida_audit_records,meta[0] if meta else "",timeline=timeline,per_matricula=per_matricula)
+    export_data = excel_bytes(docs,hits,export_diffs,st.session_state.sida_audit_records,meta[0] if meta else "",timeline=timeline,per_matricula=per_matricula,controlled=controlled)
     st.download_button("⬇️ Baixar relatório completo (.xlsx)",data=export_data,file_name="Relatorio_Robo_Formiga_SIDA.xlsx",mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",key="sida_xlsx_full")
 except Exception as exc:
     st.error(f"Falha ao gerar o Excel: {type(exc).__name__}: {exc}")

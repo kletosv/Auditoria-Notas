@@ -12,9 +12,10 @@ import unicodedata
 from pathlib import Path
 
 import fitz
+from retificacoes_controladas import extrair_edital_44, COLUNAS as RET_COLS
 
 DB = "auditoria.sqlite3"
-ENGINE_VERSION = "8.0-historico-matricula-20261013"
+ENGINE_VERSION = "8.2-retificacao-controlada-20261013"
 YEARS = tuple(str(x) for x in range(2019, 2025))
 MAT = re.compile(r"(?<!\d)\d{7,11}(?!\d)")
 ACT = re.compile(r"^\s*(?:EDITAL|RESOLUCAO|PORTARIA|DECRETO|EXTRATO|AVISO|DESPACHO|ATO|REPUBLICACAO|RETIFICACAO)\b")
@@ -59,6 +60,13 @@ def connect():
       classificacao TEXT, codigo TEXT, nota_publicada TEXT,
       fonte_contexto TEXT, observacao TEXT,
       UNIQUE(doc,page,matricula,exercicio,fonte_contexto))""")
+    con.execute("""CREATE TABLE IF NOT EXISTS retificacoes_controladas (
+        doc TEXT, arquivo TEXT, doe TEXT, data_publicacao TEXT, edital TEXT,
+        pagina_pdf INTEGER, pagina_impressa TEXT, matricula TEXT,
+        nome_antes TEXT, nome_depois TEXT, exercicio TEXT,
+        nota_antes TEXT, nota_depois TEXT, alterou_nota TEXT,
+        campo_alterado TEXT, situacao TEXT, evidencia TEXT,
+        PRIMARY KEY(doc,edital,matricula,exercicio))""")
     version = con.execute("SELECT value FROM meta WHERE key='engine_version'").fetchone()
     if version is None or version[0] != ENGINE_VERSION:
         # Histórico anterior fica arquivado, sem misturar métricas antigas.
@@ -67,6 +75,7 @@ def connect():
         if version is not None:
             con.execute("INSERT INTO history_docs SELECT *, ? FROM docs", (version[0],))
             con.execute("INSERT INTO history_hits SELECT *, ? FROM hits", (version[0],))
+        con.execute("DELETE FROM retificacoes_controladas")
         con.execute("DELETE FROM processed_pages")
         con.execute("DELETE FROM audit_details")
         con.execute("DELETE FROM hits")
@@ -257,7 +266,7 @@ def extract_candidates(page, base, inherited=None):
                 "nota":value if value and not value.startswith("C") else "",
                 "codigo":value if value.startswith("C") else "",
                 "status":status,
-                "contexto":(context["header"]+" | COLUNAS: "+str(header_columns))[:1000]}
+                "contexto":(context["header"]+" | COLUNAS: "+str(header_columns)+" | CONTEXTO PRÓXIMO: "+" ".join(r["text"] for r in rows[max(0,idx-7):min(len(rows),idx+7)]))[:3500]}
 
 def scan_one(path, base):
     con = connect()
@@ -311,6 +320,14 @@ def scan_one(path, base):
                 done=con.execute("SELECT COUNT(*) FROM processed_pages WHERE doc=?",(digest,)).fetchone()[0]
                 con.execute("UPDATE docs SET done_pages=? WHERE id=?", (done, digest))
                 con.commit()
+            # Extração controlada independente dos candidatos heurísticos.
+            # Só o Edital 44/2024 foi testado; não generalizar para outros atos.
+            if number == 11575:
+                for rec in extrair_edital_44(path):
+                    con.execute("INSERT OR REPLACE INTO retificacoes_controladas ("+
+                                ",".join(RET_COLS)+") VALUES ("+
+                                ",".join("?" for _ in RET_COLS)+")",
+                                tuple(rec[k] for k in RET_COLS))
             con.execute("UPDATE docs SET status='EXTRACAO CONCLUIDA - REVISAR' WHERE id=?", (digest,))
             con.commit()
         return "extração concluída, pendente de validação"
@@ -331,6 +348,8 @@ def run_folder(folder, base_csv):
     old = con.execute("SELECT value FROM meta WHERE key='base_hash'").fetchone()
     if old and old[0] != base_hash:
         # Candidatos calculados contra outra base não podem ser reaproveitados.
+        con.execute("DELETE FROM retificacoes_controladas")
+        con.execute("DELETE FROM retificacoes_controladas")
         con.execute("DELETE FROM processed_pages")
         con.execute("DELETE FROM audit_details")
         con.execute("DELETE FROM hits")

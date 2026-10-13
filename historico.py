@@ -19,7 +19,8 @@ EVENT_COLS = [
  'Estado documental','Trecho da publicação','Contexto do ato',
  'Eventos anteriores possíveis','Eventos posteriores possíveis',
  'Pesquisa posterior no lote','Alerta de interpretação',
- 'Relação posterior','Motivo da relação','Conferência exigida']
+ 'Relação posterior','Motivo da relação','Conferência exigida',
+ 'Nota anterior (ato identificado)','Nota posterior (ato identificado)','Edital relacionado']
 SUMMARY_COLS = [
  'Matrícula','Servidor','Exercício','Nota na Base Geral',
  'Notas anuais publicadas (candidatas)','Códigos publicados (candidatos)',
@@ -29,7 +30,8 @@ SUMMARY_COLS = [
  'Último DOE localizado','Cobertura posterior','Situação da vigência',
  'IDs dos eventos','Referências DOE/página','Eventos posteriores possíveis',
  'Tipos de ocorrências','Alerta de interpretação',
- 'Quantidade de atos posteriores possíveis','Ação recomendada']
+ 'Quantidade de atos posteriores possíveis','Ação recomendada',
+ 'Retificações tabulares identificadas (ato)','Notas anteriores (ato)','Notas posteriores (ato)']
 
 def s(v):
     if v is None: return ''
@@ -66,9 +68,10 @@ def get_pairs(t):
     if not m: return '',''
     return s(m.group(1)),s(m.group(2))
 
-def construir(hits, details):
+def construir(hits, details, controlled=None):
     hits=hits if hits is not None else pd.DataFrame()
     details=details if details is not None else pd.DataFrame()
+    controlled = controlled if controlled is not None else pd.DataFrame()
     groups={}
     for _,d in details.iterrows():
         k=tuple(s(d.get(x)) for x in ('doc','page','matricula','exercicio'))
@@ -81,10 +84,13 @@ def construir(hits, details):
         nt=nature(context+' '+s(h.get('Trecho')))
         notes='' if nt.startswith('MÉDIA DE PERÍODO') else unique(d.get('nota_publicada') for d in ds)
         codes='' if nt.startswith('MÉDIA DE PERÍODO') else unique(d.get('codigo') for d in ds)
-        onde,passe=get_pairs(h.get('Trecho'))
+        onde,passe=get_pairs(context)
+        if not (onde and passe):
+            onde,passe=get_pairs(h.get('Trecho'))
         eid=hashlib.sha256('|'.join(s(h.get(x)) for x in ('_doc','Página','Tipo','Matrícula','Ano','Trecho')).encode()).hexdigest()[:24]
         alert=[]
         if nt.startswith('MÉDIA'): alert.append('MÉDIA DE PERÍODO: NÃO IMPUTAR COMO NOTA ANUAL')
+        if onde and passe: alert.append('PAR ONDE CONSTA/PASSE A CONSTAR LOCALIZADO NO CONTEXTO — CONFERIR SE PERTENCE À MESMA LINHA E MATRÍCULA')
         if s(h.get('Ano')) not in YEARS: alert.append('EXERCÍCIO INDETERMINADO')
         if s(h.get('Tipo')) in ('RETIFICACAO','TORNAR_SEM_EFEITO','REVOGACAO','ANULACAO'):
             alert.append('ALCANCE DO ATO NÃO DEMONSTRADO: CONFERIR ORIGINAL E POSTERIORES')
@@ -94,7 +100,28 @@ def construir(hits, details):
             onde,passe,'','','','','NÃO VERIFICADA — PESQUISAR PUBLICAÇÕES POSTERIORES',
             'CANDIDATO DOCUMENTAL — NÃO HOMOLOGADO',s(h.get('Trecho')),context,
             '','','NÃO COMPROVADA — LOTE PARCIAL','; '.join(alert),
-            'NÃO COMPROVADA','', 'VERIFICAR ATO INTEGRAL E ALCANCE DA ALTERAÇÃO'])))
+            'NÃO COMPROVADA','', 'VERIFICAR ATO INTEGRAL E ALCANCE DA ALTERAÇÃO','','',''])))
+    # Eventos tabulares identificados no Edital 44/2024; mantê-los mesmo quando
+    # a triagem genérica não encontrou a matrícula naquela página.
+    for _,r in controlled.iterrows():
+        mat=s(r.get('matricula')); year=s(r.get('exercicio'))
+        same=hits[(hits['Matrícula'].astype(str)==mat) & (hits['Ano'].astype(str)==year)] if not hits.empty else pd.DataFrame()
+        base=unique(same['Nota na base']) if not same.empty else ''
+        old=s(r.get('nota_antes')); new=s(r.get('nota_depois'))
+        eid=hashlib.sha256(('RET_CONTROLADA|'+s(r.get('doc'))+'|'+s(r.get('edital'))+'|'+mat+'|'+year).encode()).hexdigest()[:24]
+        notes='Nota '+old+' → '+new if old != new else 'Nota mantida '+new
+        context=s(r.get('evidencia'))
+        events.append(dict(zip(EVENT_COLS,[eid,mat,s(r.get('nome_depois')),year,
+            s(r.get('doe')),s(r.get('arquivo')),s(r.get('pagina_pdf')),
+            'RETIFICACAO — TABELA IDENTIFICADA','NOTA ANUAL — EDITAL 44/2024',
+            s(r.get('campo_alterado')),base,'','',
+            old,new,'','','','',
+            'RETIFICAÇÃO COMPROVADA NO ATO; PUBLICAÇÕES POSTERIORES NÃO INVESTIGADAS',
+            'ALTERAÇÃO TABULAR IDENTIFICADA — VIGÊNCIA NÃO CONFIRMADA',
+            notes,context,'','','NÃO COMPROVADA — LOTE PARCIAL',
+            'CONFERIR PUBLICAÇÕES POSTERIORES E BASE GERAL',
+            'NÃO COMPROVADA','',
+            'PESQUISAR ATOS POSTERIORES; NÃO HOMOLOGAR VIGÊNCIA',old,new,s(r.get('edital'))])))
     timeline=pd.DataFrame(events,columns=EVENT_COLS).drop_duplicates(subset=['ID do evento'])
     if timeline.empty:
         return timeline,pd.DataFrame(columns=SUMMARY_COLS)
@@ -138,5 +165,8 @@ def construir(hits, details):
                 unique(g['Tipo de ocorrência']),unique(g['Alerta de interpretação']),
                 int(g['Eventos posteriores possíveis'].astype(str).str.len().gt(0).sum()),
                 ('REVISAR ATOS POSTERIORES E O ALCANCE DA RETIFICAÇÃO' if len(g) else
-                 'CONFERIR BASE GERAL E PESQUISAR PUBLICAÇÕES DO EXERCÍCIO')])
+                 'CONFERIR BASE GERAL E PESQUISAR PUBLICAÇÕES DO EXERCÍCIO'),
+                int(g['Edital relacionado'].astype(str).str.len().gt(0).sum()),
+                unique(g['Nota anterior (ato identificado)']),
+                unique(g['Nota posterior (ato identificado)'])])
     return timeline,pd.DataFrame(summary,columns=SUMMARY_COLS)

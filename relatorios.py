@@ -9,7 +9,7 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 CATEGORIES = {"INCLUSAO":"INCLUSÃO", "RETIFICACAO":"RETIFICAÇÃO", "REPUBLICACAO":"REPUBLICAÇÃO", "ANULACAO":"ANULAÇÃO", "TORNAR_SEM_EFEITO":"TORNAR SEM EFEITO", "REVOGACAO":"REVOGAÇÃO"}
 AUDIT_FIELDS = ["chave","status","DOE","Arquivo","Página","Tipo","Matrícula","Servidor","Ano","Nota na base","Valor extraído do DOE","Nota validada","Código validado","DOE da evidência","Página da evidência","Ato/Edital","Evidência e histórico posterior","Responsável","Data UTC"]
 
-def excel_bytes(docs, hits, differences=None, decisions=None, version="", timeline=None, per_matricula=None):
+def excel_bytes(docs, hits, differences=None, decisions=None, version="", timeline=None, per_matricula=None, controlled=None):
     """Abas separadas; sem homologação implícita, sem alteração da Base Geral."""
     decisions = decisions or {}
     differences = differences if differences is not None else pd.DataFrame()
@@ -30,11 +30,25 @@ def excel_bytes(docs, hits, differences=None, decisions=None, version="", timeli
         ["Escopo","Somente PDFs do lote carregado nesta execução; não consultar DOE externo automaticamente."],
     ],columns=["Indicador","Valor"])
     sheets = {"RESUMO":summary, "COBERTURA DOE":coverage}
+    if controlled is not None:
+        ret = controlled.copy().rename(columns={
+            "matricula":"Matrícula", "nome_antes":"Nome anterior",
+            "nome_depois":"Servidor", "exercicio":"Exercício",
+            "nota_antes":"Onde consta — nota", "nota_depois":"Passe a constar — nota",
+            "alterou_nota":"Alterou nota?", "campo_alterado":"Campo alterado",
+            "doe":"DOE", "edital":"Edital", "pagina_pdf":"Página do PDF",
+            "pagina_impressa":"Páginas do DOE", "situacao":"Situação",
+            "evidencia":"Evidência", "arquivo":"Arquivo", "data_publicacao":"Data publicação"})
+        sheets["RETIFICAÇÕES IDENTIFICADAS"] = ret.drop(columns=["doc"],errors="ignore")
     if per_matricula is not None:
         sheets["CONSOLIDADO MATRÍCULA"] = per_matricula
     if timeline is not None:
         sheets["HISTÓRICO DOCUMENTAL"] = timeline
         sheets["EXERCÍCIO INDETERMINADO"] = timeline[timeline["Exercício"].astype(str)=="INDETERMINADO"].copy()
+        pares=timeline[(timeline["Onde consta (texto do ato)"].astype(str).str.len()>0) & (timeline["Passe a constar (texto do ato)"].astype(str).str.len()>0)].copy()
+        sheets["PARES TEXTUAIS A CONFERIR"] = pares
+        # Pares são apenas pistas textuais; o contexto pode abranger linhas de outros servidores.
+
     for code,label in CATEGORIES.items():
         sheets[label] = hits[hits["Tipo"].astype(str).str.upper()==code].copy() if not hits.empty else hits.copy()
     sheets["OUTRAS OCORRÊNCIAS"] = hits[~hits["Tipo"].astype(str).str.upper().isin(CATEGORIES)].copy() if not hits.empty else hits.copy()
