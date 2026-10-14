@@ -21,7 +21,7 @@ st.markdown("""<style>
 [data-testid="stMetricLabel"]{font-size:.95rem}
 </style>""", unsafe_allow_html=True)
 st.title("🐜 Auditoria SIDA / ELÚCIDA")
-st.caption("Painel de acompanhamento documental • Engine 8.2 • Histórico v16 • seis abas documentais • localização ≠ validação ≠ conclusão")
+st.caption("Painel de acompanhamento documental • Engine 8.2 • Histórico v17 • seis abas documentais • localização ≠ validação ≠ conclusão")
 st.warning("Os resultados são CANDIDATOS, não correções confirmadas. Não altere a Base Geral com base nesta triagem. O Streamlit Cloud não garante armazenamento persistente e este protótipo não é repositório oficial de dados pessoais.")
 
 # Manter os dados enviados apenas na sessão/instância do aplicativo.
@@ -325,7 +325,15 @@ st.caption("Seis abas: Consolidado, Inclusões, Retificações, Onde Consta e Pa
 try:
     # A tabela de diferenças é reconstruída somente quando a associação ano/valor existe.
     export_diffs = differences[display_cols].copy() if "differences" in globals() and "display_cols" in globals() and not differences.empty else pd.DataFrame(columns=["DOE","Arquivo","Página","Tipo","Matrícula","Servidor","Ano","Nota na base","Valor extraído do DOE","Diferença aparente","Trecho","Situação"])
-    export_data = excel_bytes(docs,hits,export_diffs,st.session_state.sida_audit_records,meta[0] if meta else "",timeline=timeline,per_matricula=per_matricula,controlled=controlled,medias=medias)
+    # Ler a Base Geral carregada nesta sessão, inclusive matrículas sem hit no DOE.
+    # Não persistir os dados pessoais no repositório ou no arquivo de código.
+    base_lookup={}
+    if base_upload is not None:
+        with tempfile.TemporaryDirectory(prefix='sida_base_') as btmp:
+            bpath=Path(btmp)/'base.csv'
+            bpath.write_bytes(base_upload.getvalue())
+            base_lookup=engine.load_base_csv(bpath)
+    export_data = excel_bytes(docs,hits,export_diffs,st.session_state.sida_audit_records,meta[0] if meta else "",timeline=timeline,per_matricula=per_matricula,controlled=controlled,medias=medias,base_lookup=base_lookup)
     st.download_button("⬇️ Baixar relatório completo (.xlsx)",data=export_data,file_name="Relatorio_Robo_Formiga_SIDA.xlsx",mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",key="sida_xlsx_full")
 except Exception as exc:
     st.error(f"Falha ao gerar o Excel: {type(exc).__name__}: {exc}")
