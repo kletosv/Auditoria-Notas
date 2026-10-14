@@ -174,57 +174,83 @@ def excel_bytes(docs,hits,differences=None,decisions=None,version='',timeline=No
                 'Passe a constar (texto do ato)':f"{r['depois1']}; {r['depois2']}; {r['depois3']}; MÉDIA {r['media_depois']}",
                 'Estado documental':r['situacao'],'Edital relacionado':r['edital']})
         hist=pd.concat([hist,pd.DataFrame(extras)],ignore_index=True)
-    # Visão executiva: uma linha por matrícula, sem substituir o histórico de eventos.
-    # O vínculo não está disponível em todas as fontes; não inferir vínculo pelo nome.
+    # Histórico executivo: eventos resumidos com referência, nunca notas sem exercício.
+    # Matrícula e vínculo só podem ser separados quando vínculo estiver documentado.
     summary=[]
+    def clean(v):
+        if v is None: return ''
+        z=str(v).strip()
+        return '' if z.lower() in ('nan','none','nat') else z
+    def short_unique(values,limit=800):
+        vals=list(dict.fromkeys(clean(v) for v in values if clean(v)))
+        out='; '.join(vals)
+        return out if len(out)<=limit else out[:limit-3].rsplit('; ',1)[0]+'...'
+    def canonical_name(values):
+        vals=[clean(x) for x in values if clean(x)]
+        if not vals: return ''
+        # Mantém uma grafia única, sem concatenar variantes de caixa.
+        return max(vals,key=lambda x:(sum(c.islower() for c in x),len(x)))
+    def classify(kind):
+        x=clean(kind).upper().replace('_',' ')
+        if 'TORNAR SEM EFEITO' in x: return 'Tornar sem efeito (alcance não comprovado)'
+        if 'MÉDIA' in x or 'MEDIA' in x: return 'Retificação de média' if 'RETIFIC' in x else 'Média de período'
+        if 'RETIFIC' in x: return 'Retificação (verificar objeto)'
+        if 'INCLUS' in x: return 'Inclusão (verificar omissão anterior)'
+        if 'ANULA' in x: return 'Anulação (verificar alcance)'
+        if 'REVOGA' in x: return 'Revogação (verificar alcance)'
+        return 'Publicação / ocorrência documental'
     if not hist.empty and 'Matrícula' in hist.columns:
-        def unique_short(items, limit=350):
-            vals=list(dict.fromkeys(str(x).strip() for x in items if str(x).strip() and str(x).strip().lower()!='nan'))
-            return '; '.join(vals)[:limit]
         for mat,grp in hist.groupby('Matrícula',dropna=False,sort=False):
-            if not str(mat).strip() or str(mat).lower()=='nan': continue
+            if not clean(mat): continue
             g=grp.copy()
-            types=g.get('Tipo de ocorrência',pd.Series('',index=g.index)).fillna('').astype(str)
-            names=g.get('Servidor',pd.Series('',index=g.index)).fillna('').astype(str)
-            years=g.get('Exercício',pd.Series('',index=g.index)).fillna('').astype(str)
-            notes=g.get('Nota publicada (extração)',pd.Series('',index=g.index)).fillna('').astype(str)
-            doe=g.get('DOE',pd.Series('',index=g.index)).fillna('').astype(str)
-            pages=g.get('Página',pd.Series('',index=g.index)).fillna('').astype(str)
-            refs=unique_short((f"DOE {d} p. {pg}" for d,pg in zip(doe,pages) if d),1200)
-            event_count=len(g)
-            inc=sum('INCLUS' in x.upper() for x in types)
-            ret_count=sum('RETIFIC' in x.upper() for x in types)
-            sem=sum('TORNAR_SEM_EFEITO' in x.upper() or 'TORNAR SEM EFEITO' in x.upper() for x in types)
-            med=sum('MÉDIA' in x.upper() or 'MEDIA' in x.upper() for x in types)
-            last=next((d for d in reversed(list(doe)) if d),'')
-            snippets=[]
-            if inc: snippets.append(f'{inc} ocorrência(s) de inclusão/candidata')
-            if ret_count: snippets.append(f'{ret_count} retificação(ões)/candidata(s)')
-            if med: snippets.append(f'{med} evento(s) de média de período')
-            if sem: snippets.append(f'{sem} ocorrência(s) de tornar sem efeito (alcance pendente)')
-            if not snippets: snippets.append(f'{event_count} ocorrência(s) documental(is)')
-            short='; '.join(snippets)+'. '
-            short+=f'Último DOE no lote: {last}. ' if last else ''
-            short+='Vigência e alterações posteriores não confirmadas; conferir cobertura documental.'
-            summary.append({'Matrícula':str(mat),'Servidor':unique_short(names,150),
-                'Cargo / Vínculo':'NÃO IDENTIFICADO NAS FONTES PROCESSADAS',
-                'Exercícios pesquisados / citados':unique_short(years,120),
-                'Notas encontradas (candidatas)':unique_short(notes,300),
-                'Inclusões identificadas':inc,'Retificações identificadas':ret_count,
-                'Médias de período identificadas':med,'Atos tornar sem efeito (candidatos)':sem,
-                'Último DOE identificado no lote':last,
-                'Situação da Base Geral':'NÃO CONCLUÍDA — VERIFICAR ATOS POSTERIORES',
-                'Resumo do histórico':short[:550],
-                'Diários e páginas consultados (ocorrências)':refs,
-                'Pendências de pesquisa':'CONFERIR PUBLICAÇÕES POSTERIORES, SUPLEMENTOS E VÍNCULO',
-                'Total de eventos encontrados':event_count})
+            names=g.get('Servidor',pd.Series('',index=g.index)).tolist()
+            periods=[]; event_descriptions=[]; refs=[]; pend=[]
+            for _,ev in g.iterrows():
+                yr=clean(ev.get('Exercício',''))
+                kind=clean(ev.get('Tipo de ocorrência',''))
+                doe=clean(ev.get('DOE',''))
+                page=clean(ev.get('Página',''))
+                label=classify(kind)
+                if re.fullmatch(r'20(?:19|2[0-4])',yr): periods.append(yr)
+                elif re.fullmatch(r'20\d{2}\s*[–-]\s*20\d{2}',yr): periods.append(yr.replace(' ','').replace('–','-'))
+                elif yr and yr.upper()!='INDETERMINADO': pend.append('Conferir período não padronizado')
+                else: pend.append('Exercício não identificado em parte das ocorrências')
+                ref=f'DOE {doe}'+(f', p. {page}' if page else '') if doe else ''
+                if ref: refs.append(ref)
+                if label not in event_descriptions: event_descriptions.append(label)
+            # Eventos de média recebem contexto explícito; notas anuais só com ano inequívoco.
+            media_examples=[]
+            if not medias.empty and 'matricula' in medias.columns:
+                related=medias[medias['matricula'].astype(str).str.strip()==clean(mat)]
+                for _,m in related.iterrows():
+                    tri=clean(m.get('trienio',''))
+                    old=clean(m.get('media_antes','')); new=clean(m.get('media_depois',''))
+                    if tri and old and new:
+                        media_examples.append(f'Média {tri}: {old} → {new} (DOE {clean(m.get("doe",""))})')
+            period_sorted=sorted(set(periods),key=lambda v:(int(v[:4]),len(v),v))
+            obj=short_unique(event_descriptions,240)
+            highlights=short_unique(media_examples,300)
+            summary_text=(obj+'.' if obj else 'Ocorrências documentais localizadas.')
+            if highlights: summary_text+=' '+highlights+'.'
+            summary_text+=' Vigência e alterações posteriores ainda não confirmadas no universo documental.'
+            if any('Tornar sem efeito' in x for x in event_descriptions):
+                pend.append('Identificar ato e valor tornados sem efeito')
+            pend.append('Verificar cobertura de DOE principal e suplementos e atos posteriores')
+            summary.append({
+                'Matrícula':clean(mat),
+                'Servidor':canonical_name(names),
+                'Exercícios com ocorrências':short_unique(period_sorted,180),
+                'O que foi encontrado?':obj,
+                'Resumo do histórico':summary_text[:650],
+                'Situação da Base Geral':'PENDENTE DE CONFERÊNCIA',
+                'Providência necessária':'CONFERIR ATOS E COMPARAR COM A BASE',
+                'Diários e páginas':short_unique(refs,1500),
+                'Pendências':short_unique(pend,400),
+            })
     sheets['HISTÓRICO POR MATRÍCULA']=pd.DataFrame(summary,columns=[
-        'Matrícula','Servidor','Cargo / Vínculo','Exercícios pesquisados / citados',
-        'Notas encontradas (candidatas)','Inclusões identificadas','Retificações identificadas',
-        'Médias de período identificadas','Atos tornar sem efeito (candidatos)',
-        'Último DOE identificado no lote','Situação da Base Geral','Resumo do histórico',
-        'Diários e páginas consultados (ocorrências)','Pendências de pesquisa',
-        'Total de eventos encontrados'])
+        'Matrícula','Servidor','Exercícios com ocorrências','O que foi encontrado?',
+        'Resumo do histórico','Situação da Base Geral','Providência necessária',
+        'Diários e páginas','Pendências'])
 
     buf=BytesIO()
     with pd.ExcelWriter(buf,engine='openpyxl') as writer:
@@ -242,6 +268,14 @@ def excel_bytes(docs,hits,differences=None,decisions=None,version='',timeline=No
                 ws.column_dimensions[get_column_letter(i)].width=min(43,max(17,len(str(col))+3))
                 if 'Matrícula' in str(col) or str(col)=='DOE':
                     for row in ws.iter_rows(min_row=2,min_col=i,max_col=i):row[0].number_format='@'
+            if name=='HISTÓRICO POR MATRÍCULA':
+                for letter,width in {'A':17,'B':35,'C':25,'D':48,'E':90,'F':29,'G':42,'H':65,'I':65}.items():
+                    ws.column_dimensions[letter].width=width
+                for row in ws.iter_rows(min_row=2):
+                    for cell in row:
+                        cell.alignment=Alignment(wrap_text=True,vertical='top')
+                    ws.row_dimensions[row[0].row].height=65
+                ws.freeze_panes='C2'
             if name=='TORNAR SEM EFEITO':
                 obj_col=4
                 ws.column_dimensions['D'].width=34
