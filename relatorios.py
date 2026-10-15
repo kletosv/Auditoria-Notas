@@ -8,12 +8,13 @@ from openpyxl.utils import get_column_letter
 
 NAMES=['CONSOLIDADO','INCLUSÕES','RETIFICAÇÕES','ONDE CONSTA E PASSE A CONSTAR','TORNAR SEM EFEITO','HISTÓRICO POR MATRÍCULA']
 
-def excel_bytes(docs,hits,differences=None,decisions=None,version='',timeline=None,per_matricula=None,controlled=None,medias=None,base_lookup=None):
+def excel_bytes(docs,hits,differences=None,decisions=None,version='',timeline=None,per_matricula=None,controlled=None,medias=None,cancelamentos=None,base_lookup=None):
     hits=hits if hits is not None else pd.DataFrame()
     timeline=timeline if timeline is not None else pd.DataFrame()
     per_matricula=per_matricula if per_matricula is not None else pd.DataFrame()
     controlled=controlled if controlled is not None else pd.DataFrame()
     medias=medias if medias is not None else pd.DataFrame()
+    cancelamentos=cancelamentos if cancelamentos is not None else pd.DataFrame()
     differences=differences if differences is not None else pd.DataFrame()
     sheets={}
     base_lookup=base_lookup or {}
@@ -182,6 +183,28 @@ def excel_bytes(docs,hits,differences=None,decisions=None,version='',timeline=No
             'Escopo atingido (comprovado)':escopo if comprovado else '',
             'Arquivo de origem':r.get('Arquivo',''),'Página da ocorrência':pg,
             'ID do evento':r.get('ID do evento','')})
+    # Registros com objeto comprovado pelo texto do despacho substituem candidatos
+    # genéricos da mesma matrícula/DOE; jamais presumir situação jurídica final.
+    if not cancelamentos.empty:
+        for _,c in cancelamentos.iterrows():
+            mat=str(c['matricula']); doe=str(c['doe']); pg=str(c['pagina_pdf'])
+            sem_rows=[r for r in sem_rows if not (str(r['Matrícula'])==mat and str(r['D.O. que tornou sem efeito']).replace('.','')==doe and str(r['Página da ocorrência'])==pg)]
+            sem_rows.append({'Matrícula':mat,'Servidor':c['servidor'],
+                'Exercício / Período':c['periodo_declarado'] if c['periodo_declarado']==c['cabecalho_periodo'] or not c['cabecalho_periodo'] else 'DIVERGÊNCIA: declarado '+c['periodo_declarado']+' / cabeçalho '+c['cabecalho_periodo'],
+                'O que foi tornado sem efeito?':'NOTA — PARTE DE EDITAL',
+                'Nota ou média atingida':c['valores'],'D.O. da publicação original':c['doe_anterior'],
+                'Data e página da publicação original':'PÁGINA DO ORIGINAL NÃO VERIFICADA',
+                'D.O. que tornou sem efeito':doe,'Data e página do cancelamento':'Página PDF '+pg,
+                'Motivo informado no ato':'NÃO INFORMADO NO TRECHO',
+                'Houve publicação posterior?':'PENDENTE','Em qual D.O.?':'',
+                'Como está na Base Geral':base_note(mat,c['periodo_declarado']),
+                'Como deverá ficar na Base Geral':'PENDENTE DE VALIDAÇÃO',
+                'Providência necessária':'AVALIAR DIVERGÊNCIA DOCUMENTAL' if 'DIVERGÊNCIA' in c['situacao'] else 'CONFERIR ORIGINAL E ATOS POSTERIORES',
+                'Situação da comprovação':c['situacao'],
+                'Resumo explicativo / Histórico':'Despacho torna sem efeito '+c['escopo'].lower()+' em '+c['ato_anterior']+'. Valores da linha: '+c['valores']+'. Não presume anulação de notas de outros atos.',
+                'Ato anterior atingido (comprovado)':c['ato_anterior'],
+                'Escopo atingido (comprovado)':c['escopo'],
+                'Arquivo de origem':c['arquivo'],'Página da ocorrência':pg,'ID do evento':'CONTROLADO:'+doe+':'+mat})
     sheets['TORNAR SEM EFEITO']=pd.DataFrame(sem_rows,columns=sem_cols)
     hist=timeline.copy()
     if not medias.empty:
@@ -258,7 +281,13 @@ def excel_bytes(docs,hits,differences=None,decisions=None,version='',timeline=No
             if not controlled.empty and 'matricula' in controlled.columns:
                 for _,c in controlled[controlled['matricula'].astype(str).str.strip()==clean(mat)].iterrows():
                     annual.append(f"Nota {clean(c.get('exercicio'))}: {clean(c.get('nota_antes'))} → {clean(c.get('nota_depois'))} (DOE {clean(c.get('doe'))})")
-            if annual: summary_text+=' '+short_unique(annual,280)+'.' 
+            if annual: summary_text+=' '+short_unique(annual,280)+'.'
+            if not cancelamentos.empty:
+                linked=cancelamentos[cancelamentos['matricula'].astype(str)==clean(mat)]
+                for _,c in linked.iterrows():
+                    summary_text+=' DOE '+clean(c.get('doe'))+': despacho tornou sem efeito parte de '+clean(c.get('ato_anterior'))+' ('+clean(c.get('valores'))+').'
+                    if 'DIVERGÊNCIA' in clean(c.get('situacao')):
+                        summary_text+=' Divergência entre período declarado e cabeçalho; pendente de avaliação documental.'  
             summary_text+=' Vigência e alterações posteriores ainda não confirmadas no universo documental.'
             if any('Tornar sem efeito' in x for x in event_descriptions):
                 pend.append('Identificar ato e valor tornados sem efeito')

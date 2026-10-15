@@ -78,6 +78,7 @@ try:
     detail=pd.read_sql_query("SELECT doc,page,matricula,exercicio,nota_publicada,codigo,fonte_contexto FROM audit_details",con)
     controlled=pd.read_sql_query("SELECT * FROM retificacoes_controladas ORDER BY doe,matricula",con)
     medias=pd.read_sql_query("SELECT * FROM medias_controladas ORDER BY doe,matricula",con)
+    cancelamentos=pd.read_sql_query("SELECT * FROM cancelamentos_controlados ORDER BY doe,matricula",con)
     meta=con.execute("SELECT value FROM meta WHERE key='engine_version'").fetchone()
     con.close()
 except Exception as exc:
@@ -333,7 +334,7 @@ try:
             bpath=Path(btmp)/'base.csv'
             bpath.write_bytes(base_upload.getvalue())
             base_lookup=engine.load_base_csv(bpath)
-    export_data = excel_bytes(docs,hits,export_diffs,st.session_state.sida_audit_records,meta[0] if meta else "",timeline=timeline,per_matricula=per_matricula,controlled=controlled,medias=medias,base_lookup=base_lookup)
+    export_data = excel_bytes(docs,hits,export_diffs,st.session_state.sida_audit_records,meta[0] if meta else "",timeline=timeline,per_matricula=per_matricula,controlled=controlled,medias=medias,cancelamentos=cancelamentos,base_lookup=base_lookup)
     st.download_button("⬇️ Baixar relatório completo (.xlsx)",data=export_data,file_name="Relatorio_Robo_Formiga_SIDA.xlsx",mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",key="sida_xlsx_full")
 except Exception as exc:
     st.error(f"Falha ao gerar o Excel: {type(exc).__name__}: {exc}")

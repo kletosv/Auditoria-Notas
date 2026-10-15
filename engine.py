@@ -14,9 +14,10 @@ from pathlib import Path
 import fitz
 from retificacoes_controladas import extrair_edital_44, COLUNAS as RET_COLS
 from medias_controladas import extrair_medias, COLS as MEDIA_COLS
+from cancelamentos_controlados import extrair_cancelamentos, COLS as CANCEL_COLS
 
 DB = "auditoria.sqlite3"
-ENGINE_VERSION = "9.0-auditoria-documental"
+ENGINE_VERSION = "9.1-cancelamentos-controlados"
 YEARS = tuple(str(x) for x in range(2019, 2026))
 MAT = re.compile(r"(?<!\d)\d{7,11}(?!\d)")
 ACT = re.compile(r"^\s*(?:EDITAL|RESOLUCAO|PORTARIA|DECRETO|EXTRATO|AVISO|DESPACHO|ATO|REPUBLICACAO|RETIFICACAO)\b")
@@ -74,6 +75,7 @@ def connect():
         antes3 TEXT, media_antes TEXT, depois1 TEXT, depois2 TEXT, depois3 TEXT,
         media_depois TEXT, campos_alterados TEXT, pagina_pdf INTEGER, pagina_doe TEXT,
         origem TEXT, situacao TEXT, PRIMARY KEY(doc,edital,matricula,trienio))""")
+    con.execute("CREATE TABLE IF NOT EXISTS cancelamentos_controlados ("+",".join(f'"{c}" TEXT' for c in CANCEL_COLS)+", PRIMARY KEY(doc,pagina_pdf,matricula,ato_anterior))")
     version = con.execute("SELECT value FROM meta WHERE key='engine_version'").fetchone()
     if version is None or version[0] != ENGINE_VERSION:
         # Histórico anterior fica arquivado, sem misturar métricas antigas.
@@ -84,6 +86,7 @@ def connect():
             con.execute("INSERT INTO history_hits SELECT *, ? FROM hits", (version[0],))
         con.execute("DELETE FROM retificacoes_controladas")
         con.execute("DELETE FROM medias_controladas")
+        con.execute("DELETE FROM cancelamentos_controlados")
         con.execute("DELETE FROM processed_pages")
         con.execute("DELETE FROM audit_details")
         con.execute("DELETE FROM hits")
@@ -342,6 +345,8 @@ def scan_one(path, base):
                         ",".join(MEDIA_COLS)+") VALUES ("+
                         ",".join("?" for _ in MEDIA_COLS)+")",
                         tuple(rec[k] for k in MEDIA_COLS))
+            for rec in extrair_cancelamentos(path, digest, number):
+                con.execute("INSERT OR REPLACE INTO cancelamentos_controlados ("+",".join('"'+c+'"' for c in CANCEL_COLS)+") VALUES ("+",".join('?' for _ in CANCEL_COLS)+")", tuple(str(rec[k]) for k in CANCEL_COLS))
             con.execute("UPDATE docs SET status='EXTRACAO CONCLUIDA - REVISAR' WHERE id=?", (digest,))
             con.commit()
         return "extração concluída, pendente de validação"
@@ -364,6 +369,7 @@ def run_folder(folder, base_csv):
         # Candidatos calculados contra outra base não podem ser reaproveitados.
         con.execute("DELETE FROM retificacoes_controladas")
         con.execute("DELETE FROM medias_controladas")
+        con.execute("DELETE FROM cancelamentos_controlados")
         con.execute("DELETE FROM processed_pages")
         con.execute("DELETE FROM audit_details")
         con.execute("DELETE FROM hits")
