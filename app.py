@@ -322,7 +322,7 @@ with tab_audit:
 # Dados desta instância; não inclui PDFs ou informações de outros lotes.
 st.divider()
 st.subheader("📥 Relatório SIDA — seis abas homologadas")
-st.caption("Seis abas: Consolidado, Inclusões, Retificações, Onde Consta e Passe a Constar, Tornar Sem Efeito e Histórico por Matrícula. Inclusões sem comprovação permanecem vazias; não homologar vigência.")
+st.caption("Seis abas: Consolidado, Inclusões, Retificações, Onde Consta e Passe a Constar, Tornar Sem Efeito e Histórico por Matrícula. Inclusões candidatas são exibidas com indícios e pendências, sem homologar vigência.")
 try:
     # A tabela de diferenças é reconstruída somente quando a associação ano/valor existe.
     export_diffs = differences[display_cols].copy() if "differences" in globals() and "display_cols" in globals() and not differences.empty else pd.DataFrame(columns=["DOE","Arquivo","Página","Tipo","Matrícula","Servidor","Ano","Nota na base","Valor extraído do DOE","Diferença aparente","Trecho","Situação"])

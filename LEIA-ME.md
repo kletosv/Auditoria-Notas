@@ -1,25 +1,23 @@
-# Robô Formiga — V19.1 (candidata a testes)
+# Robô Formiga — V19.2 candidata a testes (15/10/2026)
 
-Atualização incremental da V19. Não homologada; não modifica a Base Geral.
+## Correção principal: aba INCLUSÕES
+- A coluna D deixa de repetir apenas “PENDENTE”: descreve o indício de objeto e exercício **somente quando** existe valor único extraído, exercício explícito e menção a inclusão de nota no contexto. Caso contrário explica a insuficiência. **Não é confirmação documental.**
+- A coluna H compara o valor candidato à Base quando há elementos suficientes, rotulando COINCIDE/DIVERGE **COM VALOR CANDIDATO**. Sem vínculo/ano confiável, fica pendente.
+- A coluna F **não recomenda alteração** antes de confirmar edital, linha, objeto, vínculo, elegibilidade e atos posteriores.
+- A coluna G mantém DOE/página; novas colunas incluem arquivo, ID de evento, contexto do ato, critério e valor candidato.
+- A coluna I distingue evento posterior possível de ausência de prova no lote.
+- Retificações de média não devem ser homologadas como inclusões; candidatos ambíguos ficam expressamente sinalizados.
 
-## O que foi corrigido
-- Novo módulo `cancelamentos_controlados.py`: identifica despachos com texto expresso **TORNAR SEM EFEITO**, edital anterior, DOE original, matrícula e valores na mesma linha. O leitor não contém filtro fixo por número de DOE.
-- O motor armazena as extrações controladas em tabela própria, separadas das ocorrências candidatas.
-- A aba **TORNAR SEM EFEITO** apresenta o objeto limitado à **parte do edital que publicou a nota**, sem inferir cancelamento de outros atos ou vigência atual.
-- O **HISTÓRICO POR MATRÍCULA** acrescenta, quando disponível, um resumo dos cancelamentos identificados.
-- Matrículas 43496021 e 43496024: permanece **PENDENTE DE AVALIAÇÃO DOCUMENTAL**, pois o ato declara 2020 e o cabeçalho informa Nota 2019.
+## Mantido da V19.1
+- Seis abas, leitores de retificações, médias e cancelamentos, inclusive DOE 11.883 sem filtro fixo.
+- Matrículas 43496021/43496024: **PENDENTE DE AVALIAÇÃO DOCUMENTAL**.
+- A Base Geral não é alterada.
 
-## Validação técnica realizada
-- Compilação de todos os arquivos Python.
-- Leitura do PDF fornecido do DOE 11.883: seis matrículas em quatro despachos, identificando a divergência das duas matrículas.
-- Exportação experimental das seis abas com registros controlados de cancelamento.
-
-## Limites
-- A extração controlada reconhece um formato específico de despacho e não é universal para todos os editais ou PDFs.
-- **Não houve processamento integral dos 47 PDFs** nesta rodada nem verificação exaustiva de publicações posteriores.
-- O número de páginas do cancelamento corresponde à página PDF; verificar paginação impressa no documento.
-- A inclusão permanece candidata; a vigência final permanece pendente.
-- A aba Histórico só traz os novos dados após reprocessar os PDFs com esta versão.
+## Limites importantes
+- Esta é uma atualização conservadora de **triagem**, não um leitor universal de editais de inclusão. Não conclui vigência nem a inexistência de atos posteriores.
+- Os 979 registros candidatos não equivalem a 979 inclusões confirmadas.
+- Não houve execução integral com os 47 PDFs nesta atualização.
+- Uma nova versão de motor força reprocessamento do lote no banco SQLite.
 
 ## Instalação
-Substituir os arquivos Python do repositório pelos **sete** `.py` deste pacote; manter o `requirements.txt` atual (`streamlit`, `pandas`, `PyMuPDF`, `openpyxl`). Faça backup. Recarregue Base Geral e PDFs no Streamlit e execute novo processamento. A alteração de versão reinicia a triagem no banco local; o Streamlit Cloud pode não persistir os dados entre sessões.
+Faça backup e substitua os sete arquivos `.py` do GitHub pelos do ZIP; mantenha `requirements.txt` (`streamlit`, `pandas`, `PyMuPDF`, `openpyxl`). Recarregue Base Geral e PDFs, execute a extração e baixe o Excel.

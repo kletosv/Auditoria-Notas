@@ -17,7 +17,7 @@ from medias_controladas import extrair_medias, COLS as MEDIA_COLS
 from cancelamentos_controlados import extrair_cancelamentos, COLS as CANCEL_COLS
 
 DB = "auditoria.sqlite3"
-ENGINE_VERSION = "9.1-cancelamentos-controlados"
+ENGINE_VERSION = "9.2-inclusoes-triagem-contextual"
 YEARS = tuple(str(x) for x in range(2019, 2026))
 MAT = re.compile(r"(?<!\d)\d{7,11}(?!\d)")
 ACT = re.compile(r"^\s*(?:EDITAL|RESOLUCAO|PORTARIA|DECRETO|EXTRATO|AVISO|DESPACHO|ATO|REPUBLICACAO|RETIFICACAO)\b")

@@ -51,25 +51,65 @@ def excel_bytes(docs,hits,differences=None,decisions=None,version='',timeline=No
         'Em qual D.O. consta a inclusão?','A inclusão já consta na Base?',
         'Houve alteração posterior?','Em qual D.O.?','Situação da inclusão',
         'Providência necessária','Cargo','Vínculo','Histórico documental e observações']
-    # Inclusões são candidatos à análise, nunca inclusões confirmadas por palavra-chave.
+    # V19.2: separar candidatos de inclusões com objeto comprovado.
+    # Uma palavra-chave ou nota isolada não comprova inclusão nem vigência.
     inclusion_rows=[]
+    def _norm_value(v):
+        raw=str(v or '').strip().upper()
+        if not raw or raw in ('NAN','NONE'): return ''
+        if re.fullmatch(r'\d{1,3}(?:[,.]\d{1,2})?',raw):
+            return ('%.4f' % float(raw.replace(',','.'))).rstrip('0').rstrip('.')
+        return raw
     if not timeline.empty:
-        candidates=timeline[timeline['Tipo de ocorrência'].astype(str).str.contains('INCLUSAO|INCLUSÃO',case=False,na=False)]
+        candidates=timeline[timeline['Tipo de ocorrência'].astype(str).str.contains(r'INCLUSAO|INCLUSÃO',case=False,na=False,regex=True)]
         for _,ev in candidates.iterrows():
-            mat=str(ev.get('Matrícula','')).strip(); yr=str(ev.get('Exercício','')).strip()
-            ref=f"DOE {ev.get('DOE','')} p. {ev.get('Página','')}"
+            mat=str(ev.get('Matrícula','')).strip()
+            yr=str(ev.get('Exercício','')).strip()
+            trecho=str(ev.get('Trecho da publicação','') or '')
+            contexto=str(ev.get('Contexto do ato','') or '')
+            full=(contexto+' '+trecho).upper()
+            notes=[x.strip() for x in str(ev.get('Nota publicada (extração)','') or '').split(' | ') if x.strip()]
+            codes=[x.strip() for x in str(ev.get('Código publicado (extração)','') or '').split(' | ') if x.strip()]
+            unique_vals=list(dict.fromkeys(notes+codes))
+            year_ok=bool(re.fullmatch(r'20(?:19|2[0-5])',yr))
+            # Sem vinculação inequívoca da nota à linha e ao cabeçalho do ato,
+            # um valor extraído continua indício, nunca valor a aplicar na Base.
+            value_hint=unique_vals[0] if year_ok and len(unique_vals)==1 else ''
+            is_media=bool(re.search(r'\bM[ÉE]DIA\b|\bTRI[ÊE]NIO\b',full,re.I))
+            has_explicit_object=bool(re.search(r'\bINCLUS[ÃA]O\s+(?:DA\s+)?NOTA\b|\bINCLUIR\s+(?:A\s+)?NOTA\b',full,re.I))
+            verified_object=bool(year_ok and value_hint and has_explicit_object and not is_media)
+            # A confirmação exige ato/linha/cabeçalho e cobertura posterior, ainda não demonstrados.
+            object_label=(f'INDÍCIO: nota/código {value_hint} no exercício {yr} — CONFERIR LINHA DO ATO' if verified_object
+                          else 'OBJETO NÃO COMPROVADO — CONFERIR EDITAL, LINHA E EXERCÍCIO')
+            base=base_note(mat,yr)
+            # Comparação é indiciária: não implica que a inclusão foi oficialmente comprovada.
+            if verified_object and base:
+                comparison=('COINCIDE COM VALOR CANDIDATO — VALIDAR ATO' if _norm_value(base)==_norm_value(value_hint)
+                            else 'DIVERGE DO VALOR CANDIDATO — VALIDAR ATO')
+            elif not base and year_ok: comparison='BASE SEM VALOR — CONFERIR VÍNCULO E ELEGIBILIDADE'
+            else: comparison='PENDENTE — DADOS INSUFICIENTES'
+            doe=str(ev.get('DOE','')).strip(); page=str(ev.get('Página','')).strip()
+            ref=f'DOE {doe} p. {page}'
+            later=str(ev.get('Eventos posteriores possíveis','') or '').strip()
             inclusion_rows.append({'Matrícula':mat,'Servidor':ev.get('Servidor',''),
-                'Exercício':yr,'O que foi incluído?':'PENDENTE — IDENTIFICAR OBJETO NO ATO',
-                'Como está na Base Geral':base_note(mat,yr),
-                'Como deverá ficar na Base Geral':'PENDENTE DE COMPROVAÇÃO',
+                'Exercício':yr,'O que foi incluído?':object_label,
+                'Como está na Base Geral':base,
+                'Como deverá ficar na Base Geral':'NÃO DETERMINADO — ATO E POSTERIORES PENDENTES',
                 'Em qual D.O. consta a inclusão?':ref,
-                'A inclusão já consta na Base?':'PENDENTE',
-                'Houve alteração posterior?':'PENDENTE','Em qual D.O.?':'',
-                'Situação da inclusão':'PENDENTE — CANDIDATO DOCUMENTAL',
-                'Providência necessária':'CONFERIR EDITAL, OBJETO E BASE ANTES DE INCLUIR',
+                'A inclusão já consta na Base?':comparison,
+                'Houve alteração posterior?':('POSSÍVEL — EXAMINAR EVENTOS' if later else 'NÃO COMPROVADO NO LOTE'),
+                'Em qual D.O.?':'',
+                'Situação da inclusão':'CANDIDATO — NÃO HOMOLOGADO',
+                'Providência necessária':'VALIDAR OBJETO, CABEÇALHO, VÍNCULO, ATO ORIGINAL E POSTERIORES',
                 'Cargo':'','Vínculo':'',
-                'Histórico documental e observações':str(ev.get('Trecho da publicação',''))[:850]})
-    sheets['INCLUSÕES']=pd.DataFrame(inclusion_rows,columns=inclusao_cols)
+                'Histórico documental e observações':trecho[:850],
+                'Valor extraído (indício)':value_hint,
+                'Critério da triagem':('OBJETO SUGERIDO POR TEXTO; LINHA NÃO COMPROVADA' if verified_object else 'SEM OBJETO EXPLÍCITO E UNÍVOCO'),
+                'ID do evento':str(ev.get('ID do evento','')),
+                'Arquivo de origem':str(ev.get('Arquivo','')),
+                'Contexto do ato':contexto[:900]})
+    extra_inclusion_cols=['Valor extraído (indício)','Critério da triagem','ID do evento','Arquivo de origem','Contexto do ato']
+    sheets['INCLUSÕES']=pd.DataFrame(inclusion_rows,columns=inclusao_cols+extra_inclusion_cols)
     ret=[]
     if not controlled.empty:
         for _,r in controlled.iterrows():
@@ -256,7 +296,7 @@ def excel_bytes(docs,hits,differences=None,decisions=None,version='',timeline=No
                 doe=clean(ev.get('DOE',''))
                 page=clean(ev.get('Página',''))
                 label=classify(kind)
-                if re.fullmatch(r'20(?:19|2[0-4])',yr): periods.append(yr)
+                if re.fullmatch(r'20(?:19|2[0-5])',yr): periods.append(yr)
                 elif re.fullmatch(r'20\d{2}\s*[–-]\s*20\d{2}',yr): periods.append(yr.replace(' ','').replace('–','-'))
                 elif yr and yr.upper()!='INDETERMINADO': pend.append('Conferir período não padronizado')
                 else: pend.append('Exercício não identificado em parte das ocorrências')
