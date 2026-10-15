@@ -1,28 +1,22 @@
-# Robô Formiga — Atualização 17 (consolidada para teste)
+# Robô Formiga — V19 (candidata a testes)
 
-Esta versão SUBSTITUI a atualização 17 anterior (ainda não publicada). Faça backup do repositório antes de substituir os arquivos.
+## Entrega
+Atualização do código-fonte Streamlit. **Não homologada documentalmente.** A Base Geral não é alterada.
 
-## Atualizações incluídas
-- Preserva correções da versão 17 anterior: busca direta da nota na Base Geral CSV; exercícios indeterminados sinalizados; atos de tornar sem efeito permanecem candidatos sem prova do alcance.
-- RETIFICAÇÕES: mantém matrícula, servidor, exercício; acrescenta campo alterado, nota da Base, nota retificada, DOE da alteração, alteração posterior, DOE posterior, status de correção da Base. Preserva colunas de origem, edital, página, notas anteriores e observação. Normaliza representação numérica na comparação, sem declarar vigência.
-- INCLUSÕES: prepara as 15 colunas aprovadas, incluindo natureza, Base atual, resultado esperado, DOE, inclusão já na Base, posterioridade, situação, providência, cargo, vínculo e histórico. Continua VAZIA enquanto não existir comprovação da omissão na publicação original; não inventa inclusão.
-- HISTÓRICO POR MATRÍCULA: agora é um resumo por matrícula, com contagem de eventos, tipos, notas candidatas, DOE/páginas e pendências. O vínculo não é inferido quando a fonte não o contém. A data exata de cada evento depende da fonte e não é inventada.
-- Preserva seis abas, inclusive ONDE CONSTA E PASSE A CONSTAR.
+## Alterações
+- Versão do motor elevada para 9.0, com leitura de anos até 2025; processamento de PDFs por lote sem filtro por DOE 11.883. O código V18 já não tinha filtro explícito por esse número.
+- INCLUSÕES passa a receber **candidatos** detectados, devidamente marcados PENDENTE, sem presumir inclusão oficial, situação final da Base ou providência automática.
+- TORNAR SEM EFEITO inclui no resumo referências textuais a editais/DOE detectadas no contexto do ato, como **indícios para conferência**, sem inventar o objeto cancelado.
+- HISTÓRICO POR MATRÍCULA inclui exemplos de retificações anuais controladas com exercício, valor anterior, valor posterior e DOE, além dos exemplos de médias já existentes.
+- Corrigida repetição de comandos de limpeza no reset de base.
 
-## Limitações relevantes
-- Ainda NÃO existe pesquisa exaustiva automática de atos posteriores. Por isso, as colunas de SIM/NÃO referentes à vigência posterior ficam PENDENTE, mesmo quando a nota da Base coincide com a retificação.
-- O histórico executivo não substitui a trilha de eventos; referências são limitadas ao lote processado. Eventos com vínculos distintos da mesma matrícula não podem ser separados sem informação de vínculo.
-- O parser de inclusão documental e prova de omissão ainda precisa ser implementado e testado com editais específicos.
-- Não recalcular nem substituir automaticamente médias de triênio, quadriênio ou quinquênio.
-- O arquivo XLSX de teste contém dados de teste controlado e NÃO constitui auditoria do DOE.
+## Limitações e testes obrigatórios
+- O leitor controlado de retificações continua restrito ao Edital 44/2024; o de médias, ao Edital 58/SED/2025. Outros formatos não estão homologados.
+- Referências textuais não comprovam vínculo entre atos, vigência ou ausência de publicações posteriores.
+- Inclusões não são classificadas como confirmadas até identificação do objeto e confronto documental.
+- A pesquisa depende exclusivamente dos PDFs enviados. A cobertura integral do DOE e suplementos deve ser conferida separadamente.
+- A divergência das matrículas 43496021 e 43496024 continua PENDENTE DE AVALIAÇÃO DOCUMENTAL.
+- Testar com lote sem DOE 11.883 e depois com lote completo; conferir as seis abas e comparar com os PDFs originais.
 
 ## Instalação
-Substitua os seis arquivos .py no GitHub pelos arquivos do ZIP (app.py, engine.py, historico.py, relatorios.py, retificacoes_controladas.py, medias_controladas.py). Preserve requirements.txt. Faça novo upload da Base Geral e dos PDFs e gere um novo relatório.
-
-## Revisão da aba TORNAR SEM EFEITO (versão 17)
-- Coluna D: **O que foi tornado sem efeito?** em destaque visual (laranja/vermelho para objeto comprovado; amarelo para PENDENTE DE IDENTIFICAÇÃO).
-- Exibe separadamente objeto, valor atingido, DOE original, DOE de cancelamento, página, motivo, publicações posteriores, situação da Base, providência e resumo explicativo.
-- **Não presume** que um ato genérico atingiu uma NOTA ou MÉDIA; só usa objeto comprovado por campo documental explícito.
-- Uma retificação tornada sem efeito não cancela automaticamente a nota original.
-- Não inventa datas, páginas, valores ou situação de vigência; quando ausentes, campos permanecem vazios ou PENDENTE.
-- A extração automatizada do objeto/ato original ainda precisa de validação documental; esta revisão melhora a apresentação e preserva a segurança das conclusões.
+Substitua os seis arquivos `.py` no projeto GitHub/Streamlit pelos seis deste pacote, preservando seu `requirements.txt` (streamlit, pandas, PyMuPDF, openpyxl). Faça backup da V18. Ao mudar a versão do motor, os candidatos anteriores do SQLite são arquivados e a triagem é reiniciada. Não publique CSVs nominais ou PDFs em repositório público.

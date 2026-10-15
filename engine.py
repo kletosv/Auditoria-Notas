@@ -16,8 +16,8 @@ from retificacoes_controladas import extrair_edital_44, COLUNAS as RET_COLS
 from medias_controladas import extrair_medias, COLS as MEDIA_COLS
 
 DB = "auditoria.sqlite3"
-ENGINE_VERSION = "8.3-medias-controladas-v16"
-YEARS = tuple(str(x) for x in range(2019, 2025))
+ENGINE_VERSION = "9.0-auditoria-documental"
+YEARS = tuple(str(x) for x in range(2019, 2026))
 MAT = re.compile(r"(?<!\d)\d{7,11}(?!\d)")
 ACT = re.compile(r"^\s*(?:EDITAL|RESOLUCAO|PORTARIA|DECRETO|EXTRATO|AVISO|DESPACHO|ATO|REPUBLICACAO|RETIFICACAO)\b")
 ADI = re.compile(r"\bADI\b|\bPGDI\b|AVALIACAO\s+(?:DE\s+)?DESEMPENHO|RESULTADO\s+(?:DA\s+)?AVALIACAO|NOTAS?\s+(?:DA\s+)?AVALIACAO")
@@ -30,7 +30,7 @@ KIND = {
     "REPUBLICACAO": re.compile(r"\bREPUBLIC\w*"),
 }
 BAD = re.compile(r"\b(?:LICITACAO|PREGAO|CONTRATO|ORCAMENTARI[AO]|EMPENHO|NOTA\s+FISCAL|EXTRATO\s+DE\s+CONTRATO)\b")
-YEAR_LABEL = re.compile(r"\b(?:EXERCICIO|ANO\s+(?:DA\s+)?AVALIACAO|ADI\s+(?:DE\s+)?|PGDI\s+(?:DE\s+)?|AVALIACAO\s+DE\s+DESEMPENHO\s+(?:DE\s+)?)[\s:–-]*(20(?:19|20|21|22|23|24))\b")
+YEAR_LABEL = re.compile(r"\b(?:EXERCICIO|ANO\s+(?:DA\s+)?AVALIACAO|ADI\s+(?:DE\s+)?|PGDI\s+(?:DE\s+)?|AVALIACAO\s+DE\s+DESEMPENHO\s+(?:DE\s+)?)[\s:–-]*(20(?:19|20|21|22|23|24|25))\b")
 SCORE = re.compile(r"(?<![\w,.])(?:100(?:[,.]00)?|(?:[0-9]|[1-9][0-9])[,\.][0-9]{1,2}|C[0-9]{3})(?!\w)")
 PRIORITY_SECTION = re.compile(r"ATOS\s+DE\s+PESSOAL\s+DO\s+PODER\s+EXECUTIVO", re.I)
 DOC_NUM = re.compile(r"(?<!\d)(1[012][._\s]?\d{3})(?!\d)")
@@ -362,8 +362,6 @@ def run_folder(folder, base_csv):
     old = con.execute("SELECT value FROM meta WHERE key='base_hash'").fetchone()
     if old and old[0] != base_hash:
         # Candidatos calculados contra outra base não podem ser reaproveitados.
-        con.execute("DELETE FROM retificacoes_controladas")
-        con.execute("DELETE FROM medias_controladas")
         con.execute("DELETE FROM retificacoes_controladas")
         con.execute("DELETE FROM medias_controladas")
         con.execute("DELETE FROM processed_pages")

@@ -8,7 +8,7 @@ import re
 import unicodedata
 import pandas as pd
 
-YEARS = tuple(str(y) for y in range(2019, 2025))
+YEARS = tuple(str(y) for y in range(2019, 2026))
 EVENT_COLS = [
  'ID do evento','Matrícula','Servidor','Exercício','DOE','Arquivo','Página',
  'Tipo de ocorrência','Natureza do valor','Campo afetado','Nota na Base Geral',

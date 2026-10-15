@@ -21,7 +21,7 @@ st.markdown("""<style>
 [data-testid="stMetricLabel"]{font-size:.95rem}
 </style>""", unsafe_allow_html=True)
 st.title("🐜 Auditoria SIDA / ELÚCIDA")
-st.caption("Painel de acompanhamento documental • Engine 8.2 • Histórico v17 • seis abas documentais • localização ≠ validação ≠ conclusão")
+st.caption("Painel de acompanhamento documental • Engine V19 • Histórico V19 • seis abas documentais • localização ≠ validação ≠ conclusão")
 st.warning("Os resultados são CANDIDATOS, não correções confirmadas. Não altere a Base Geral com base nesta triagem. O Streamlit Cloud não garante armazenamento persistente e este protótipo não é repositório oficial de dados pessoais.")
 
 # Manter os dados enviados apenas na sessão/instância do aplicativo.
