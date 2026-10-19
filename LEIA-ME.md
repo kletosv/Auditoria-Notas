@@ -1,37 +1,29 @@
-# Robô Formiga — V19.2 candidata a testes (15/10/2026)
+# Robô Formiga V19.4 — candidata a testes
 
-## Correção principal: aba INCLUSÕES
-- A coluna D deixa de repetir apenas “PENDENTE”: descreve o indício de objeto e exercício **somente quando** existe valor único extraído, exercício explícito e menção a inclusão de nota no contexto. Caso contrário explica a insuficiência. **Não é confirmação documental.**
-- A coluna H compara o valor candidato à Base quando há elementos suficientes, rotulando COINCIDE/DIVERGE **COM VALOR CANDIDATO**. Sem vínculo/ano confiável, fica pendente.
-- A coluna F **não recomenda alteração** antes de confirmar edital, linha, objeto, vínculo, elegibilidade e atos posteriores.
-- A coluna G mantém DOE/página; novas colunas incluem arquivo, ID de evento, contexto do ato, critério e valor candidato.
-- A coluna I distingue evento posterior possível de ausência de prova no lote.
-- Retificações de média não devem ser homologadas como inclusões; candidatos ambíguos ficam expressamente sinalizados.
+## Objetivo
+Ampliar a varredura de retificações para todos os PDFs processados (Diários principais, suplementos e extras), em vez de executar o leitor especializado somente quando o número do DOE é 11.575.
 
-## Mantido da V19.1
-- Seis abas, leitores de retificações, médias e cancelamentos, inclusive DOE 11.883 sem filtro fixo.
-- Matrículas 43496021/43496024: **PENDENTE DE AVALIAÇÃO DOCUMENTAL**.
-- A Base Geral não é alterada.
+## Alterações
+- `retificacoes_controladas.py`: novo `extrair_retificacoes()` procura pares textuais “Onde consta” / “Passe a constar” em todos os PDFs, identifica matrículas comuns aos dois lados e registra o DOE inferido do nome do arquivo, página PDF, edital próximo e valores anterior/novo.
+- `engine.py`: chama o extrator em cada PDF e atualiza a versão do motor para reconstruir os dados derivados, evitando misturar resultados da lógica anterior.
+- Mantém as seis abas e os outros módulos da V19.3.
 
-## Limites importantes
-- Esta é uma atualização conservadora de **triagem**, não um leitor universal de editais de inclusão. Não conclui vigência nem a inexistência de atos posteriores.
-- Os 979 registros candidatos não equivalem a 979 inclusões confirmadas.
-- Não houve execução integral com os 47 PDFs nesta atualização.
-- Uma nova versão de motor força reprocessamento do lote no banco SQLite.
+## Limites e cautelas
+- Esta é uma varredura de **candidatos**, não um extrator universal nem uma conclusão jurídica.
+- O pareamento depende de texto extraível e de estrutura compatível com “Onde consta” / “Passe a constar”. Retificações com outros formatos, imagens escaneadas ou tabelas fragmentadas podem não ser detectadas.
+- “Exercício” pode ficar `INDETERMINADO`; não atribuir valor a um ano sem evidência local suficiente.
+- Não confirma vigência, efeito jurídico, vínculo funcional ou ausência de publicação posterior.
+- A Base Geral não é alterada automaticamente.
+- O caso de regressão do DOE 11.575 / Edital 44/2024 deve ser conferido após o processamento completo; o teste inicial encontrou outros editais nesse mesmo Diário, evidenciando que a cobertura anterior era estreita.
 
 ## Instalação
-Faça backup e substitua os sete arquivos `.py` do GitHub pelos do ZIP; mantenha `requirements.txt` (`streamlit`, `pandas`, `PyMuPDF`, `openpyxl`). Recarregue Base Geral e PDFs, execute a extração e baixe o Excel.
+1. Faça uma cópia dos arquivos atuais do projeto.
+2. Substitua os sete arquivos `.py` pelos arquivos deste pacote.
+3. Mantenha o `requirements.txt` já usado pelo projeto.
+4. Reprocesse os PDFs e a Base Geral para reconstruir os dados com a nova versão do motor.
+5. Compare a aba RETIFICAÇÕES com os Diários fonte antes de qualquer uso operacional.
 
-# Robô Formiga — V19.3 candidata a testes (19/10/2026)
-
-## Evolução da aba INCLUSÕES
-- A triagem passa a registrar indícios textuais de objeto (nota/pontuação, código, média/período, matrícula e identificação do servidor) em coluna própria.
-- Cada linha recebe uma justificativa objetiva da pendência e sinalização de confiabilidade formal do exercício extraído.
-- Esses rótulos são **indícios do texto**, não comprovação de inclusão nem autorização para alterar a Base Geral.
-- A coluna “O que foi incluído?” passa a explicitar os indícios encontrados mesmo quando não há associação segura com matrícula/exercício/valor.
-
-## Limites
-- Não é um extrator universal; layout de tabela, cabeçalho, ato anterior e linha individual ainda exigem validação documental.
-- Os 979 candidatos não equivalem a 979 inclusões comprovadas.
-- Não foi executado o lote completo dos 47 PDFs nesta atualização.
-- A Base Geral permanece sem alterações automáticas.
+## Testes realizados nesta preparação
+- Compilação sintática dos módulos Python: aprovada.
+- Teste pontual com DOE 11.575: o parser encontrou 17 pares candidatos em diferentes editais. Isso é um teste local, não uma auditoria completa dos 47 PDFs.
+- Não homologada; a cobertura completa e os falsos positivos/negativos ainda precisam de validação documental.

@@ -12,12 +12,12 @@ import unicodedata
 from pathlib import Path
 
 import fitz
-from retificacoes_controladas import extrair_edital_44, COLUNAS as RET_COLS
+from retificacoes_controladas import extrair_retificacoes, COLUNAS as RET_COLS
 from medias_controladas import extrair_medias, COLS as MEDIA_COLS
 from cancelamentos_controlados import extrair_cancelamentos, COLS as CANCEL_COLS
 
 DB = "auditoria.sqlite3"
-ENGINE_VERSION = "9.2-inclusoes-triagem-contextual"
+ENGINE_VERSION = "9.3-retificacoes-multidoe-candidatas"
 YEARS = tuple(str(x) for x in range(2019, 2026))
 MAT = re.compile(r"(?<!\d)\d{7,11}(?!\d)")
 ACT = re.compile(r"^\s*(?:EDITAL|RESOLUCAO|PORTARIA|DECRETO|EXTRATO|AVISO|DESPACHO|ATO|REPUBLICACAO|RETIFICACAO)\b")
@@ -331,14 +331,13 @@ def scan_one(path, base):
                 done=con.execute("SELECT COUNT(*) FROM processed_pages WHERE doc=?",(digest,)).fetchone()[0]
                 con.execute("UPDATE docs SET done_pages=? WHERE id=?", (done, digest))
                 con.commit()
-            # Extração controlada independente dos candidatos heurísticos.
-            # Só o Edital 44/2024 foi testado; não generalizar para outros atos.
-            if number == 11575:
-                for rec in extrair_edital_44(path):
-                    con.execute("INSERT OR REPLACE INTO retificacoes_controladas ("+
-                                ",".join(RET_COLS)+") VALUES ("+
-                                ",".join("?" for _ in RET_COLS)+")",
-                                tuple(rec[k] for k in RET_COLS))
+            # Varredura geral de retificações candidatas em todos os PDFs/suplementos.
+            # A identificação de pares não comprova vigência nem substituição final.
+            for rec in extrair_retificacoes(path):
+                con.execute("INSERT OR REPLACE INTO retificacoes_controladas ("+
+                            ",".join(RET_COLS)+") VALUES ("+
+                            ",".join("?" for _ in RET_COLS)+")",
+                            tuple(rec[k] for k in RET_COLS))
             if number == 11960:
                 for rec in extrair_medias(path, digest):
                     con.execute("INSERT OR REPLACE INTO medias_controladas ("+
