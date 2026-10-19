@@ -21,3 +21,17 @@
 
 ## Instalação
 Faça backup e substitua os sete arquivos `.py` do GitHub pelos do ZIP; mantenha `requirements.txt` (`streamlit`, `pandas`, `PyMuPDF`, `openpyxl`). Recarregue Base Geral e PDFs, execute a extração e baixe o Excel.
+
+# Robô Formiga — V19.3 candidata a testes (19/10/2026)
+
+## Evolução da aba INCLUSÕES
+- A triagem passa a registrar indícios textuais de objeto (nota/pontuação, código, média/período, matrícula e identificação do servidor) em coluna própria.
+- Cada linha recebe uma justificativa objetiva da pendência e sinalização de confiabilidade formal do exercício extraído.
+- Esses rótulos são **indícios do texto**, não comprovação de inclusão nem autorização para alterar a Base Geral.
+- A coluna “O que foi incluído?” passa a explicitar os indícios encontrados mesmo quando não há associação segura com matrícula/exercício/valor.
+
+## Limites
+- Não é um extrator universal; layout de tabela, cabeçalho, ato anterior e linha individual ainda exigem validação documental.
+- Os 979 candidatos não equivalem a 979 inclusões comprovadas.
+- Não foi executado o lote completo dos 47 PDFs nesta atualização.
+- A Base Geral permanece sem alterações automáticas.

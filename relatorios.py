@@ -77,10 +77,18 @@ def excel_bytes(docs,hits,differences=None,decisions=None,version='',timeline=No
             value_hint=unique_vals[0] if year_ok and len(unique_vals)==1 else ''
             is_media=bool(re.search(r'\bM[ÉE]DIA\b|\bTRI[ÊE]NIO\b',full,re.I))
             has_explicit_object=bool(re.search(r'\bINCLUS[ÃA]O\s+(?:DA\s+)?NOTA\b|\bINCLUIR\s+(?:A\s+)?NOTA\b',full,re.I))
+            # V19.3: classifica indícios textuais sem converter classificação em comprovação.
+            object_types=[]
+            if re.search(r'\bNOTAS?\b|\bPONTUA[CÇ][ÃA]O\b',full,re.I): object_types.append('NOTA/PONTUAÇÃO')
+            if re.search(r'\bC[0-9]{3}\b|\bC[ÓO]DIGO\b',full,re.I): object_types.append('CÓDIGO')
+            if re.search(r'\bM[ÉE]DIA\b|\bTRI[ÊE]NIO\b|\bQUADRI[ÊE]NIO\b',full,re.I): object_types.append('MÉDIA/PERÍODO')
+            if re.search(r'\bMATR[IÍ]CULA\b',full,re.I): object_types.append('MATRÍCULA')
+            if re.search(r'\bNOME\b|\bSERVIDOR(?:A)?\b',full,re.I): object_types.append('IDENTIFICAÇÃO DO SERVIDOR')
+            object_hint='; '.join(dict.fromkeys(object_types)) if object_types else 'OBJETO NÃO DETECTADO NO TEXTO EXTRAÍDO'
             verified_object=bool(year_ok and value_hint and has_explicit_object and not is_media)
             # A confirmação exige ato/linha/cabeçalho e cobertura posterior, ainda não demonstrados.
-            object_label=(f'INDÍCIO: nota/código {value_hint} no exercício {yr} — CONFERIR LINHA DO ATO' if verified_object
-                          else 'OBJETO NÃO COMPROVADO — CONFERIR EDITAL, LINHA E EXERCÍCIO')
+            object_label=(f'INDÍCIO: {object_hint}; valor {value_hint}; exercício {yr} — CONFERIR LINHA DO ATO' if verified_object
+                          else f'INDÍCIO(S) TEXTUAL(IS): {object_hint} — OBJETO/ALCANCE NÃO COMPROVADOS')
             base=base_note(mat,yr)
             # Comparação é indiciária: não implica que a inclusão foi oficialmente comprovada.
             if verified_object and base:
@@ -107,8 +115,11 @@ def excel_bytes(docs,hits,differences=None,decisions=None,version='',timeline=No
                 'Critério da triagem':('OBJETO SUGERIDO POR TEXTO; LINHA NÃO COMPROVADA' if verified_object else 'SEM OBJETO EXPLÍCITO E UNÍVOCO'),
                 'ID do evento':str(ev.get('ID do evento','')),
                 'Arquivo de origem':str(ev.get('Arquivo','')),
-                'Contexto do ato':contexto[:900]})
-    extra_inclusion_cols=['Valor extraído (indício)','Critério da triagem','ID do evento','Arquivo de origem','Contexto do ato']
+                'Contexto do ato':contexto[:900],
+                'Indícios de objeto no texto':object_hint,
+                'Exercício extraído confiável':'SIM — FORMATO/ANO VÁLIDO' if year_ok else 'NÃO — EXERCÍCIO INDETERMINADO',
+                'Motivo da pendência':('Ato/linha e publicações posteriores ainda precisam ser confirmados.' if verified_object else 'Não há associação inequívoca entre objeto, matrícula, exercício e valor no texto extraído.')})
+    extra_inclusion_cols=['Valor extraído (indício)','Critério da triagem','ID do evento','Arquivo de origem','Contexto do ato','Indícios de objeto no texto','Exercício extraído confiável','Motivo da pendência']
     sheets['INCLUSÕES']=pd.DataFrame(inclusion_rows,columns=inclusao_cols+extra_inclusion_cols)
     ret=[]
     if not controlled.empty:
