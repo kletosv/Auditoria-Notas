@@ -39,6 +39,11 @@ def extrair_retificacoes(pdf_path):
         with fitz.open(path) as doc: texts=[p.get_text('text') for p in doc]
     except Exception:
         return []
+    # Mantém os limites exatos de cada página para atribuir a ocorrência à página correta.
+    page_ranges=[]; cursor=0
+    for page_no, page_text in enumerate(texts, start=1):
+        page_ranges.append((cursor, cursor + len(page_text), page_no))
+        cursor += len(page_text) + 1
     joined='\n'.join(texts)
     if not re.search(r'(?i)\b(?:ONDE\s+CONSTA|PASSE\s+A\s+CONSTAR)\b',joined): return []
     digest=hashlib.sha256(path.read_bytes()).hexdigest()
@@ -63,13 +68,16 @@ def extrair_retificacoes(pdf_path):
         edital=actmatches[-1].group(0).strip() if actmatches else 'ATO NÃO IDENTIFICADO'
         yrm=re.search(r'(?i)(?:exerc[ií]cio|ciclo avaliativo|nota)\s*(?:de|do|da)?\s*(20(?:19|2[0-6]))',joined[max(0,m.start()-350):m.start()]+' '+between)
         year=yrm.group(1) if yrm else 'INDETERMINADO'
-        page_idx=next((j+1 for j,t in enumerate(texts) if m.group() in t),0)
+        # Localiza a página pela posição absoluta do marcador, não pela primeira
+        # ocorrência da mesma expressão genérica em qualquer página.
+        page_idx=next((pg for start,end,pg in page_ranges if start <= m.start() < end), 0)
         for mat in sorted(set(before)&set(new)):
             old,newv=before[mat],new[mat]
             fields=[]
             if old[0]!=newv[0]: fields.append('NOME')
             if old[1]!=newv[1]: fields.append('NOTA/CÓDIGO')
-            key=(mat,edital,old,newv,page_idx)
+            # Identidade do evento inclui o trecho/posição para não fundir atos distintos.
+            key=(digest,mat,edital,old,newv,page_idx,m.start())
             if key in seen: continue
             seen.add(key)
             out.append(dict(zip(COLUNAS,[digest,path.name,doe,date,edital,page_idx,'NÃO EXTRAÍDA',mat,

@@ -1,9 +1,11 @@
-# Robô Formiga V19.4 — candidata a testes
+# Robô Formiga V19.5 — candidata a testes
 
 ## Objetivo
 Ampliar a varredura de retificações para todos os PDFs processados (Diários principais, suplementos e extras), em vez de executar o leitor especializado somente quando o número do DOE é 11.575.
 
 ## Alterações
+- Corrigida a atribuição da página PDF: agora é calculada pela posição exata do marcador no texto concatenado, evitando associar ocorrências repetidas à primeira página que contém a mesma expressão.
+- A chave de deduplicação preserva a posição da ocorrência para reduzir a fusão de eventos distintos no mesmo ato.
 - `retificacoes_controladas.py`: novo `extrair_retificacoes()` procura pares textuais “Onde consta” / “Passe a constar” em todos os PDFs, identifica matrículas comuns aos dois lados e registra o DOE inferido do nome do arquivo, página PDF, edital próximo e valores anterior/novo.
 - `engine.py`: chama o extrator em cada PDF e atualiza a versão do motor para reconstruir os dados derivados, evitando misturar resultados da lógica anterior.
 - Mantém as seis abas e os outros módulos da V19.3.
@@ -24,6 +26,7 @@ Ampliar a varredura de retificações para todos os PDFs processados (Diários p
 5. Compare a aba RETIFICAÇÕES com os Diários fonte antes de qualquer uso operacional.
 
 ## Testes realizados nesta preparação
-- Compilação sintática dos módulos Python: aprovada.
-- Teste pontual com DOE 11.575: o parser encontrou 17 pares candidatos em diferentes editais. Isso é um teste local, não uma auditoria completa dos 47 PDFs.
+- Correção da lógica de mapeamento página-texto revisada.
+- A compilação sintática deve ser executada após instalação no ambiente do projeto.
+- Não foi realizada nova varredura dos 47 PDFs nesta preparação.
 - Não homologada; a cobertura completa e os falsos positivos/negativos ainda precisam de validação documental.
